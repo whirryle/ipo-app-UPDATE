@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminOnly::class,
             'superadmin' => \App\Http\Middleware\SuperAdminOnly::class,
+            'not_superadmin' => \App\Http\Middleware\NotSuperAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

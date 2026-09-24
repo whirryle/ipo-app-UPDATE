@@ -5,15 +5,15 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 
-// Hanya superadmin (role admin + province_id null).
+// Hanya superadmin (role superadmin)
 class SuperAdminOnly
 {
     public function handle(Request $request, Closure $next)
     {
         $u = $request->user();
-        if (!$u || $u->role !== 'admin' || $u->province_id !== null) {
-            if ($request->expectsJson()) return response()->json(['error' => 'Hanya Superadmin yang dapat mengelola user'], 403);
-            abort(403, 'Hanya Superadmin yang dapat mengelola user.');
+        if (!$u || $u->role !== 'superadmin') {
+            if ($request->expectsJson()) return response()->json(['error' => 'Hanya Super Admin yang dapat mengakses ini'], 403);
+            abort(403, 'Hanya Super Admin yang dapat mengakses ini.');
         }
         return $next($request);
     }

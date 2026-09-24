@@ -4,6 +4,7 @@ use App\Http\Controllers\AktivitasController;
 use App\Http\Controllers\ApiController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BandingController;
+use App\Http\Controllers\BobotController;
 use App\Http\Controllers\CalculateController;
 use App\Http\Controllers\SistemController;
 use App\Http\Controllers\SampahController;
@@ -23,6 +24,34 @@ Route::prefix('api/v1')->middleware('throttle:60,1')->group(function () {
     Route::get('/tren/{province}', [ApiController::class, 'tren'])->where('province', '[0-9]+');
 });
 
+// Public API untuk form register (no auth required)
+Route::get('/api/districts', function (Illuminate\Http\Request $request) {
+    $cityId = $request->query('city_id');
+    if (!$cityId) {
+        return response()->json(['error' => 'city_id required'], 422);
+    }
+    return \App\Models\District::where('city_id', $cityId)->orderBy('name')->select('id', 'name')->get();
+});
+
+Route::get('/api/city-from-district', function (Illuminate\Http\Request $request) {
+    $districtId = $request->query('district_id');
+    if (!$districtId) {
+        return response()->json(['error' => 'district_id required'], 422);
+    }
+    $district = \App\Models\District::find($districtId);
+    if (!$district) {
+        return response()->json(['error' => 'District not found'], 404);
+    }
+    $city = \App\Models\City::find($district->city_id);
+    return response()->json([
+        'district_id' => $district->id,
+        'district_name' => $district->name,
+        'city_id' => $district->city_id,
+        'city_name' => $city->name ?? null,
+        'province_id' => $city->province_id ?? 1
+    ]);
+});
+
 Route::get('/', fn() => redirect('/dashboard'));
 Route::get('/api-dok', fn() => view('api.dok'));
 
@@ -35,7 +64,7 @@ Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
     Route::get('/register', [AuthController::class, 'showRegister']);
-    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
+    Route::post('/register', [AuthController::class, 'register'])->name('register')->middleware('throttle:10,1');
     Route::get('/lupa-password', [AuthController::class, 'lupa']);
     Route::post('/lupa-password', [AuthController::class, 'aturUlang'])->middleware('throttle:10,1');
     Route::get('/verifikasi-2fa', [AuthController::class, 'kode2fa']);
@@ -58,7 +87,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/data', [DimensionController::class, 'menu']);
     Route::get('/data/{dim}', [DimensionController::class, 'index'])->where('dim', '[a-z-]+');
     Route::get('/data/{dim}/{id}/riwayat', [DimensionController::class, 'riwayat'])->where(['dim' => '[a-z-]+', 'id' => '[0-9]+']);
-    Route::middleware('admin')->group(function () {
+    
+    // CRUD hanya untuk admin_city dan operator (superadmin read-only)
+    Route::middleware(['admin', 'not_superadmin'])->group(function () {
         Route::get('/data/{dim}/tambah', [DimensionController::class, 'create'])->where('dim', '[a-z-]+');
         Route::get('/sampah', [SampahController::class, 'index']);
         Route::post('/sampah/{id}/pulih', [SampahController::class, 'pulih'])->where('id', '[0-9]+');
@@ -76,7 +107,9 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::get('/hitung', [CalculateController::class, 'show']);
-    Route::middleware('admin')->group(function () {
+    
+    // Hitung ulang hanya untuk admin_city dan operator
+    Route::middleware(['admin', 'not_superadmin'])->group(function () {
         Route::post('/hitung/ulang', [CalculateController::class, 'recalculate']);
     });
     Route::get('/hitung/riwayat/{provinceId}', [CalculateController::class, 'history'])->where('provinceId', '[0-9]+');
@@ -110,6 +143,14 @@ Route::middleware('auth')->group(function () {
         Route::post('/users/{id}/reset', [UserController::class, 'tokenReset'])->where('id', '[0-9]+');
         Route::post('/users/register-toggle', [UserController::class, 'toggleRegister']);
         Route::get('/users/ekspor', [UserController::class, 'ekspor']);
+
+        // Bobot IPO (hanya superadmin)
+        Route::get('/bobot', [BobotController::class, 'index']);
+        Route::get('/bobot/create', [BobotController::class, 'create']);
+        Route::post('/bobot', [BobotController::class, 'store']);
+        Route::get('/bobot/{id}/edit', [BobotController::class, 'edit'])->where('id', '[0-9]+');
+        Route::put('/bobot/{id}', [BobotController::class, 'update'])->where('id', '[0-9]+');
+        Route::delete('/bobot/{id}', [BobotController::class, 'destroy'])->where('id', '[0-9]+');
     });
 
     Route::get('/bantuan', fn() => view('help'));

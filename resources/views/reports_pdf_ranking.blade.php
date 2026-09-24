@@ -16,14 +16,14 @@
 <body>
 <div style="border-bottom:3px double #4C1D95;padding-bottom:8px;margin-bottom:10px">
   <div style="font-size:15pt;font-weight:bold;color:#4C1D95">INDEKS PEMBANGUNAN OLAHRAGA (IPO)</div>
-  <div style="font-size:10pt;color:#555">Aplikasi pendataan indikator olahraga 38 provinsi · Tahun {{ $year }}</div>
+  <div style="font-size:10pt;color:#555">Aplikasi pendataan indikator olahraga Kalimantan Timur · Tahun {{ $year }}</div>
 </div>
-<h1>Peringkat Provinsi — Indeks Pembangunan Olahraga {{ $year }}</h1>
+<h1>Peringkat Kabupaten/Kota — Indeks Pembangunan Olahraga {{ $year }}</h1>
 <table>
-  <thead><tr><th>No</th><th>Provinsi</th><th>Skor</th><th>Kategori</th></tr></thead>
+  <thead><tr><th>No</th><th>Kabupaten/Kota</th><th>Skor</th><th>Kategori</th></tr></thead>
   <tbody>
     @foreach($rows as $r)
-      <tr><td>{{ $loop->iteration }}</td><td>{{ $r->province_name }}</td><td>{{ (int) round($r->ipo_score * 100) }}</td><td>{{ $r->kategori }}</td></tr>
+      <tr><td>{{ $loop->iteration }}</td><td>{{ $r->city_name }}</td><td>{{ (int) round($r->ipo_score * 100) }}</td><td>{{ $r->kategori }}</td></tr>
     @endforeach
   </tbody>
 </table>

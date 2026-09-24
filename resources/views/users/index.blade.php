@@ -13,19 +13,42 @@
   <p style="font-size:12.5px;color:var(--ink-3)">Kelola akun admin, operator &amp; user · {{ $users->total() }} user</p>
   <form method="GET" action="/users" class="toolbar no-print">
     <input type="text" name="q" class="input" style="max-width:240px" placeholder="Cari nama/username…" value="{{ $q }}">
-    <button class="btn btn-secondary btn-sm" type="submit">Cari</button>
+    <select name="district_id" class="input" style="max-width:200px">
+      <option value="">Semua Kecamatan</option>
+      @foreach($allDistricts as $d)
+        <option value="{{ $d->id }}" {{ request('district_id') == $d->id ? 'selected' : '' }}>{{ $d->name }} ({{ $d->city_name }})</option>
+      @endforeach
+    </select>
+    <button class="btn btn-secondary btn-sm" type="submit">Filter</button>
     <a class="btn btn-secondary btn-sm" href="/users/ekspor?q={{ urlencode($q) }}">⭳ Ekspor CSV</a>
   </form>
   <div class="table-wrap">
     <table class="table">
-      <thead><tr>@foreach([['full_name','Nama'],['username','Username'],['role','Peran']] as [$k,$l])<th><a href="?{{ http_build_query(array_merge(request()->query(), ['sort' => $k, 'dir' => ($sort === $k && $dir === 'asc' ? 'desc' : 'asc')])) }}" style="color:inherit">{{ $l }}@if($sort === $k){{ $dir === 'asc' ? ' ▲' : ' ▼' }}@endif</a></th>@endforeach<th>Provinsi</th><th class="no-print">Aksi</th></tr></thead>
+      <thead><tr>@foreach([['full_name','Nama'],['username','Username'],['role','Peran']] as [$k,$l])<th><a href="?{{ http_build_query(array_merge(request()->query(), ['sort' => $k, 'dir' => ($sort === $k && $dir === 'asc' ? 'desc' : 'asc')])) }}" style="color:inherit">{{ $l }}@if($sort === $k){{ $dir === 'asc' ? ' ▲' : ' ▼' }}@endif</a></th>@endforeach<th>Kab/Kota</th><th>Kecamatan</th><th class="no-print">Aksi</th></tr></thead>
       <tbody>
         @foreach($users as $usr)
           <tr>
             <td><strong>{{ $usr->full_name }}</strong></td>
             <td>{{ $usr->username }}</td>
-            <td><span class="badge {{ $usr->role === 'admin' ? 'badge-blue' : ($usr->role === 'operator' ? 'badge-cukup' : 'badge-neutral') }}">{{ ucfirst($usr->role) }}</span></td>
-            <td>{{ $usr->province_name ?? '—' }}</td>
+            <td>
+              @php
+                $roleLabel = match($usr->role) {
+                  'superadmin' => 'Super Admin',
+                  'admin_city' => 'Admin Kota',
+                  'operator' => 'Operator',
+                  default => ucfirst($usr->role),
+                };
+                $roleBadge = match($usr->role) {
+                  'superadmin' => 'badge-blue',
+                  'admin_city' => 'badge-cukup',
+                  'operator' => 'badge-neutral',
+                  default => 'badge-neutral',
+                };
+              @endphp
+              <span class="badge {{ $roleBadge }}">{{ $roleLabel }}</span>
+            </td>
+            <td>{{ $usr->city_name ?? '—' }}</td>
+            <td>{{ $usr->district_name ?? '—' }}</td>
             <td class="no-print" style="white-space:nowrap">
               <a href="/users/{{ $usr->id }}/ubah" class="btn btn-secondary btn-sm">Ubah</a>
               <button type="button" class="btn btn-danger btn-sm" onclick="askDelete('/users/{{ $usr->id }}')">Hapus</button>

@@ -13,15 +13,28 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $q = trim((string) $request->query('q', ''));
+        $districtId = $request->query('district_id');
         $boleh = ['username', 'full_name', 'role'];
         $sort = in_array($request->query('sort'), $boleh, true) ? $request->query('sort') : 'id';
         $dir = strtolower((string) $request->query('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
-        $users = DB::table('users as u')->leftJoin('provinces as p', 'p.id', '=', 'u.province_id')
-            ->select('u.id', 'u.username', 'u.full_name', 'u.role', 'u.province_id', 'p.name as province_name')
+        $users = DB::table('users as u')
+            ->leftJoin('provinces as p', 'p.id', '=', 'u.province_id')
+            ->leftJoin('cities as c', 'c.id', '=', 'u.city_id')
+            ->leftJoin('districts as d', 'd.id', '=', 'u.district_id')
+            ->select('u.id', 'u.username', 'u.full_name', 'u.role', 'u.province_id', 'u.city_id', 'u.district_id', 'p.name as province_name', 'c.name as city_name', 'd.name as district_name')
             ->when($q !== '', fn($qq) => $qq->where(fn($w) => $w->where('u.username', 'like', "%{$q}%")->orWhere('u.full_name', 'like', "%{$q}%")))
+            ->when($districtId, fn($qq) => $qq->where('u.district_id', $districtId))
             ->orderBy("u.{$sort}", $dir)->paginate(20)->withQueryString();
+        
+        $allDistricts = DB::table('districts as d')
+            ->join('cities as c', 'c.id', '=', 'd.city_id')
+            ->select('d.id', 'd.name', 'c.name as city_name')
+            ->where('c.province_id', 1)
+            ->orderBy('d.name')
+            ->get();
+        
         if ($request->expectsJson()) return response()->json(['users' => $users->items(), 'total' => $users->total()]);
-        return view('users.index', ['users' => $users, 'q' => $q, 'sort' => $sort, 'dir' => $dir, 'tutup' => \App\Support\Pengaturan::registerTutup()]);
+        return view('users.index', ['users' => $users, 'q' => $q, 'sort' => $sort, 'dir' => $dir, 'tutup' => \App\Support\Pengaturan::registerTutup(), 'allDistricts' => $allDistricts]);
     }
 
     public function toggleRegister(Request $request)
@@ -50,22 +63,45 @@ class UserController extends Controller
 
     public function create()
     {
-        return view('users.form', ['row' => null, 'provinces' => DB::table('provinces')->orderBy('name')->get()]);
+        return view('users.form', [
+            'row' => null,
+            'provinces' => DB::table('provinces')->orderBy('name')->get(),
+            'cities' => DB::table('cities')->orderBy('name')->get(),
+            'districts' => DB::table('districts')->orderBy('name')->get(),
+            'roles' => ['superadmin' => 'Super Admin', 'admin_city' => 'Admin Kota/Kab', 'operator' => 'Operator Kecamatan'],
+        ]);
     }
 
     public function store(Request $request)
     {
         $data = $request->validate(
-            ['username' => 'required|min:3|max:50|unique:users,username', 'password' => 'required|min:6', 'full_name' => 'required|max:100', 'role' => 'nullable|in:admin,operator,user', 'province_id' => 'nullable|integer|exists:provinces,id'],
+            [
+                'username' => 'required|min:3|max:50|unique:users,username',
+                'password' => 'required|min:6',
+                'full_name' => 'required|max:100',
+                'role' => 'nullable|in:superadmin,admin_city,operator',
+                'province_id' => 'nullable|integer|exists:provinces,id',
+                'city_id' => 'nullable|integer|exists:cities,id',
+                'district_id' => 'nullable|integer|exists:districts,id',
+            ],
             ['username.required' => 'Username wajib diisi', 'username.unique' => 'Username sudah digunakan', 'password.required' => 'Password wajib diisi', 'full_name.required' => 'Nama lengkap wajib diisi']
         );
         if ($tolak = \App\Support\PasswordKuat::cek($data['password'])) {
             if ($request->expectsJson()) return response()->json(['error' => $tolak], 422);
             return back()->withErrors(['password' => $tolak])->withInput();
         }
+        // Auto-set province_id ke Kaltim (id=1)
+        $provinceId = $data['province_id'] ?? 1;
+        $cityId = $data['city_id'] ?? null;
+        $districtId = $data['district_id'] ?? null;
+        // Clear city/district based on role
+        $role = $data['role'] ?? 'operator';
+        if ($role === 'superadmin') { $cityId = null; $districtId = null; }
+        elseif ($role === 'admin_city') { $districtId = null; }
         $user = User::create([
             'username' => $data['username'], 'password_hash' => Hash::make($data['password']),
-            'full_name' => $data['full_name'], 'role' => $data['role'] ?? 'user', 'province_id' => $data['province_id'] ?? null,
+            'full_name' => $data['full_name'], 'role' => $role,
+            'province_id' => $provinceId, 'city_id' => $cityId, 'district_id' => $districtId,
         ]);
         if ($request->expectsJson()) return response()->json(['id' => $user->id, 'message' => __('User berhasil dibuat')]);
         Audit::catat($request->user(), 'tambah', 'users', $user->id, ['username' => $user->username, 'role' => $user->role]);
@@ -76,7 +112,13 @@ class UserController extends Controller
     {
         $row = DB::table('users')->where('id', $id)->first();
         abort_if(!$row, 404, 'User tidak ditemukan');
-        return view('users.form', ['row' => (array) $row, 'provinces' => DB::table('provinces')->orderBy('name')->get()]);
+        return view('users.form', [
+            'row' => (array) $row,
+            'provinces' => DB::table('provinces')->orderBy('name')->get(),
+            'cities' => DB::table('cities')->orderBy('name')->get(),
+            'districts' => DB::table('districts')->orderBy('name')->get(),
+            'roles' => ['superadmin' => 'Super Admin', 'admin_city' => 'Admin Kota/Kab', 'operator' => 'Operator Kecamatan'],
+        ]);
     }
 
     public function update(Request $request, int $id)
@@ -87,10 +129,28 @@ class UserController extends Controller
             abort(404, __('User tidak ditemukan'));
         }
         $data = $request->validate(
-            ['full_name' => 'required|max:100', 'role' => 'required|in:admin,operator,user', 'province_id' => 'nullable|integer|exists:provinces,id', 'password' => 'nullable|min:6'],
+            [
+                'full_name' => 'required|max:100',
+                'role' => 'required|in:superadmin,admin_city,operator',
+                'province_id' => 'nullable|integer|exists:provinces,id',
+                'city_id' => 'nullable|integer|exists:cities,id',
+                'district_id' => 'nullable|integer|exists:districts,id',
+                'password' => 'nullable|min:6',
+            ],
             ['full_name.required' => 'Nama lengkap wajib diisi']
         );
-        $upd = ['full_name' => $data['full_name'], 'role' => $data['role'], 'province_id' => $data['province_id'] ?? null];
+        // Clear city/district based on role
+        $cityId = $data['city_id'] ?? null;
+        $districtId = $data['district_id'] ?? null;
+        if ($data['role'] === 'superadmin') { $cityId = null; $districtId = null; }
+        elseif ($data['role'] === 'admin_city') { $districtId = null; }
+        $upd = [
+            'full_name' => $data['full_name'],
+            'role' => $data['role'],
+            'province_id' => $data['province_id'] ?? 1,
+            'city_id' => $cityId,
+            'district_id' => $districtId,
+        ];
         if (!empty($data['password'])) {
             if ($tolak = \App\Support\PasswordKuat::cek($data['password'])) {
                 if ($request->expectsJson()) {

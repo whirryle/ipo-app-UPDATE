@@ -133,18 +133,37 @@ class AuthController extends Controller
         return view('auth.register');
     }
 
-    // Registrasi publik dikunci ke peran user — admin/operator hanya via Manajemen User.
+    // Registrasi publik — user bisa pilih role sendiri
     public function register(Request $request)
     {
         if (\App\Support\Pengaturan::registerTutup()) {
             if ($request->expectsJson()) return response()->json(['error' => __('Pendaftaran ditutup sementara')], 403);
             abort(403, __('Pendaftaran ditutup sementara'));
         }
+        
         $data = $request->validate(
-            ['username' => 'required|min:3|max:50|unique:users,username', 'password' => 'required|min:6', 'full_name' => 'required|max:100'],
             [
-                'username.required' => 'Username wajib diisi', 'username.unique' => 'Username sudah digunakan',
-                'password.required' => 'Password wajib diisi', 'full_name.required' => 'Nama lengkap wajib diisi',
+                'username' => 'required|min:3|max:50|unique:users,username',
+                'password' => 'required|min:6',
+                'full_name' => 'required|max:100',
+                'no_whatsapp' => 'required|regex:/^08[0-9]{9,11}$/|unique:users,no_whatsapp',
+                'role' => 'required|in:user,admin,operator,superadmin',
+                'province_id' => 'required|exists:provinces,id',
+                'city_id' => 'nullable|required_if:role,admin,operator|exists:cities,id',
+                'district_id' => 'nullable|required_if:role,operator|exists:districts,id',
+            ],
+            [
+                'username.required' => 'Username wajib diisi',
+                'username.unique' => 'Username sudah digunakan',
+                'password.required' => 'Password wajib diisi',
+                'full_name.required' => 'Nama lengkap wajib diisi',
+                'no_whatsapp.required' => 'No WhatsApp wajib diisi',
+                'no_whatsapp.regex' => 'No WhatsApp harus format 08xxxxxxxxxx',
+                'no_whatsapp.unique' => 'No WhatsApp sudah terdaftar',
+                'role.required' => 'Role wajib dipilih',
+                'province_id.required' => 'Provinsi wajib dipilih',
+                'city_id.required_if' => 'Kab/Kota wajib dipilih untuk role admin/operator',
+                'district_id.required_if' => 'Kecamatan wajib dipilih untuk role operator',
             ]
         );
 
@@ -152,9 +171,16 @@ class AuthController extends Controller
             if ($request->expectsJson()) return response()->json(['error' => $tolak], 422);
             return back()->withErrors(['password' => $tolak])->withInput();
         }
+        
         $user = User::create([
-            'username' => $data['username'], 'password_hash' => Hash::make($data['password']),
-            'full_name' => $data['full_name'], 'role' => 'user', 'province_id' => null,
+            'username' => $data['username'],
+            'password_hash' => Hash::make($data['password']),
+            'full_name' => $data['full_name'],
+            'no_whatsapp' => $data['no_whatsapp'],
+            'role' => $data['role'],
+            'province_id' => $data['province_id'],
+            'city_id' => $data['city_id'] ?? null,
+            'district_id' => $data['district_id'] ?? null,
         ]);
 
         if ($request->expectsJson()) return response()->json(['id' => $user->id, 'message' => __('Registrasi berhasil')], 201);

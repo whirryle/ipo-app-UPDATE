@@ -34,12 +34,12 @@ class ReportsController extends Controller
             $data['row'] = $row;
             $data['score'] = round((float) $row->ipo_score * 100, 2);
         } elseif ($tab === 'ranking') {
-            $data['ranking'] = DB::table('ipo_summary as ipo')->join('provinces as p', 'p.id', '=', 'ipo.province_id')
-                ->select('ipo.province_id', 'p.name as province_name', 'ipo.ipo_score', 'ipo.kategori')
-                ->where('ipo.year', $year)
-                ->when($request->query('q'), fn($qq, $qqq) => $qq->where('p.name', 'like', "%{$qqq}%"));
+            $data['ranking'] = DB::table('ipo_summary as ipo')->join('cities as c', 'c.id', '=', 'ipo.city_id')
+                ->select('ipo.city_id', 'c.name as city_name', 'ipo.ipo_score', 'ipo.kategori')
+                ->where('ipo.year', $year)->whereNotNull('ipo.city_id')
+                ->when($request->query('q'), fn($qq, $qqq) => $qq->where('c.name', 'like', "%{$qqq}%"));
             $urut = $request->query('urut', 'skor');
-            if ($urut === 'nama') $data['ranking'] = $data['ranking']->orderBy('p.name')->get();
+            if ($urut === 'nama') $data['ranking'] = $data['ranking']->orderBy('c.name')->get();
             else $data['ranking'] = $data['ranking']->orderByDesc('ipo.ipo_score')->get();
             $data['rq'] = trim((string) $request->query('q', ''));
             $data['urut'] = $urut;
@@ -73,9 +73,9 @@ class ReportsController extends Controller
         $pid = $u->province_id ? (int) $u->province_id : (int) ($request->query('province_id') ?: 1);
 
         if ($tab === 'ranking') {
-            $rows = DB::table('ipo_summary as ipo')->join('provinces as p', 'p.id', '=', 'ipo.province_id')
-                ->select('p.name as province_name', 'ipo.ipo_score', 'ipo.kategori')
-                ->where('ipo.year', $year)->orderByDesc('ipo.ipo_score')->get();
+            $rows = DB::table('ipo_summary as ipo')->join('cities as c', 'c.id', '=', 'ipo.city_id')
+                ->select('c.name as city_name', 'ipo.ipo_score', 'ipo.kategori')
+                ->where('ipo.year', $year)->whereNotNull('ipo.city_id')->orderByDesc('ipo.ipo_score')->get();
             $pdf = Pdf::loadView('reports_pdf_ranking', ['rows' => $rows, 'year' => $year]);
             return $pdf->download("IPO-Laporan-ranking-{$year}.pdf");
         }
@@ -131,12 +131,12 @@ class ReportsController extends Controller
         $head = [];
         $rows = [];
         if ($tab === 'ranking') {
-            $head = ['No', 'Provinsi', 'Skor', 'Kategori'];
+            $head = ['No', 'Kabupaten/Kota', 'Skor', 'Kategori'];
             $n = 0;
-            foreach (DB::table('ipo_summary as ipo')->join('provinces as p', 'p.id', '=', 'ipo.province_id')
-                ->select('p.name as province_name', 'ipo.ipo_score', 'ipo.kategori')
-                ->where('ipo.year', $year)->orderByDesc('ipo.ipo_score')->get() as $r) {
-                $rows[] = [++$n, $r->province_name, round((float) $r->ipo_score * 100, 2), $r->kategori];
+            foreach (DB::table('ipo_summary as ipo')->join('cities as c', 'c.id', '=', 'ipo.city_id')
+                ->select('c.name as city_name', 'ipo.ipo_score', 'ipo.kategori')
+                ->where('ipo.year', $year)->whereNotNull('ipo.city_id')->orderByDesc('ipo.ipo_score')->get() as $r) {
+                $rows[] = [++$n, $r->city_name, round((float) $r->ipo_score * 100, 2), $r->kategori];
             }
         } elseif ($tab === 'trend') {
             $head = ['Tahun', 'Skor', 'Kategori'];

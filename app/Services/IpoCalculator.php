@@ -2,11 +2,40 @@
 
 namespace App\Services;
 
+use App\Models\Bobot;
 use Illuminate\Support\Facades\DB;
 
 // Port 1:1 dari services/calculator.js — rumus identik agar skor sama.
 class IpoCalculator
 {
+    // Default bobot untuk dimensi angket responden
+    private const DEFAULT_BOBOT = [
+        'literasi_fisik' => 7,
+        'partisipasi' => 7,
+        'perkembangan_personal' => 6,
+        'kesehatan' => 6,
+        'ekonomi' => 4,
+        'kebugaran' => 3,
+    ];
+
+    // Baca bobot untuk tahun tertentu (dari DB atau default)
+    private static function getBobot(int $year): array
+    {
+        $bobot = Bobot::where('year', $year)->first();
+        
+        if ($bobot) {
+            return [
+                'literasi_fisik' => (float) $bobot->literasi_fisik,
+                'partisipasi' => (float) $bobot->partisipasi,
+                'perkembangan_personal' => (float) $bobot->perkembangan_personal,
+                'kesehatan' => (float) $bobot->kesehatan,
+                'ekonomi' => (float) $bobot->ekonomi,
+                'kebugaran' => (float) $bobot->kebugaran,
+            ];
+        }
+        
+        return self::DEFAULT_BOBOT;
+    }
     public const CATEGORIES = [
         ['min' => 0, 'max' => 25, 'label' => 'Sangat Kurang'],
         ['min' => 26, 'max' => 50, 'label' => 'Kurang'],
@@ -148,7 +177,22 @@ class IpoCalculator
             'd8_ekonomi' => self::provinceEkonomi($pid, $year),
             'd9_performa' => self::provincePerforma($pid, $year),
         ];
-        $score = array_sum($dims) / 9;
+        
+        // Baca bobot dinamis dari database
+        $bobot = self::getBobot($year);
+        
+        // Hitung skor dengan bobot (6 dimensi angket responden dibagi bobot, lalu + 3 dimensi lain, dibagi 9)
+        $weightedSum = ($dims['d3_literasi_fisik'] / max($bobot['literasi_fisik'], 0.01))
+                     + ($dims['d4_partisipasi'] / max($bobot['partisipasi'], 0.01))
+                     + ($dims['d5_kebugaran'] / max($bobot['kebugaran'], 0.01))
+                     + ($dims['d6_kesehatan'] / max($bobot['kesehatan'], 0.01))
+                     + ($dims['d7_perkembangan_personal'] / max($bobot['perkembangan_personal'], 0.01))
+                     + ($dims['d8_ekonomi'] / max($bobot['ekonomi'], 0.01))
+                     + $dims['d1_sdm']
+                     + $dims['d2_ruang_terbuka']
+                     + $dims['d9_performa'];
+        $score = $weightedSum / 9;
+        
         $result = array_merge(
             ['province_id' => $pid, 'year' => $year],
             $dims,
@@ -168,9 +212,318 @@ class IpoCalculator
         DB::table('ipo_summary')->upsert(
             array_merge($dims, [
                 'province_id' => $pid, 'year' => $year,
+                'city_id' => null, 'district_id' => null,
                 'ipo_score' => $score, 'kategori' => self::kategori($score),
             ]),
-            ['province_id', 'year']
+            ['province_id', 'city_id', 'district_id', 'year']
+        );
+        return $result;
+    }
+
+    // ===== CITY-LEVEL CALCULATION =====
+    
+    public static function citySDM(int $cityId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(s.indeks) v FROM sdm_olahraga s '
+            . 'JOIN districts d ON s.district_id = d.id '
+            . 'WHERE d.city_id = ? AND s.year = ?', [$cityId, $year]);
+        return (float) ($r->v ?? 0);
+    }
+
+    public static function cityRuangTerbuka(int $cityId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(r.indeks) v FROM ruang_terbuka r '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'JOIN districts d ON v.district_id = d.id '
+            . 'WHERE d.city_id = ? AND r.year = ?', [$cityId, $year]);
+        return (float) ($r->v ?? 0);
+    }
+
+    public static function cityLiterasi(int $cityId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(l.indeks) v FROM literasi_fisik l '
+            . 'JOIN respondents r ON l.respondent_id = r.id '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'JOIN districts d ON v.district_id = d.id '
+            . 'WHERE d.city_id = ? AND l.year = ?', [$cityId, $year]);
+        return (float) ($r->v ?? 0);
+    }
+
+    public static function cityPartisipasi(int $cityId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT COUNT(CASE WHEN p.frekuensi >= 3 THEN 1 END) aktif, COUNT(*) total '
+            . 'FROM partisipasi p '
+            . 'JOIN respondents r ON p.respondent_id = r.id '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'JOIN districts d ON v.district_id = d.id '
+            . 'WHERE d.city_id = ? AND p.year = ?', [$cityId, $year]);
+        if (!$r || !$r->total) return 0;
+        return $r->aktif / $r->total;
+    }
+
+    public static function cityKebugaran(int $cityId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(k.indeks) v FROM kebugaran k '
+            . 'JOIN respondents r ON k.respondent_id = r.id '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'JOIN districts d ON v.district_id = d.id '
+            . 'WHERE d.city_id = ? AND k.year = ?', [$cityId, $year]);
+        return (float) ($r->v ?? 0);
+    }
+
+    public static function cityKesehatan(int $cityId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(k.indeks) v FROM kesehatan k '
+            . 'JOIN respondents r ON k.respondent_id = r.id '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'JOIN districts d ON v.district_id = d.id '
+            . 'WHERE d.city_id = ? AND k.year = ?', [$cityId, $year]);
+        return (float) ($r->v ?? 0);
+    }
+
+    public static function cityPerkembangan(int $cityId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(pp.indeks) v FROM perkembangan_personal pp '
+            . 'JOIN respondents r ON pp.respondent_id = r.id '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'JOIN districts d ON v.district_id = d.id '
+            . 'WHERE d.city_id = ? AND pp.year = ?', [$cityId, $year]);
+        return (float) ($r->v ?? 0);
+    }
+
+    public static function cityEkonomi(int $cityId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(e.total_belanja) v FROM ekonomi e '
+            . 'JOIN respondents r ON e.respondent_id = r.id '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'JOIN districts d ON v.district_id = d.id '
+            . 'WHERE d.city_id = ? AND e.year = ?', [$cityId, $year]);
+        return min(((float) ($r->v ?? 0)) / 5000000, 1);
+    }
+
+    public static function cityPerforma(int $cityId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT SUM(p.medali_emas) emas, SUM(p.medali_perak) perak, SUM(p.medali_perunggu) perunggu '
+            . 'FROM performa p WHERE p.city_id = ? AND p.year = ?', [$cityId, $year]);
+        if (!$r) return 0;
+        $na = ($r->emas ?? 0) * 5 + ($r->perak ?? 0) * 3 + ($r->perunggu ?? 0);
+        return min($na / 200, 1);
+    }
+
+    public static function cityFull(int $cityId, int $year): array
+    {
+        $dims = [
+            'd1_sdm' => self::citySDM($cityId, $year),
+            'd2_ruang_terbuka' => self::cityRuangTerbuka($cityId, $year),
+            'd3_literasi_fisik' => self::cityLiterasi($cityId, $year),
+            'd4_partisipasi' => self::cityPartisipasi($cityId, $year),
+            'd5_kebugaran' => self::cityKebugaran($cityId, $year),
+            'd6_kesehatan' => self::cityKesehatan($cityId, $year),
+            'd7_perkembangan_personal' => self::cityPerkembangan($cityId, $year),
+            'd8_ekonomi' => self::cityEkonomi($cityId, $year),
+            'd9_performa' => self::cityPerforma($cityId, $year),
+        ];
+        
+        // Baca bobot dinamis dari database
+        $bobot = self::getBobot($year);
+        
+        // Hitung skor dengan bobot (6 dimensi angket responden dibagi bobot, lalu + 3 dimensi lain, dibagi 9)
+        $weightedSum = ($dims['d3_literasi_fisik'] / max($bobot['literasi_fisik'], 0.01))
+                     + ($dims['d4_partisipasi'] / max($bobot['partisipasi'], 0.01))
+                     + ($dims['d5_kebugaran'] / max($bobot['kebugaran'], 0.01))
+                     + ($dims['d6_kesehatan'] / max($bobot['kesehatan'], 0.01))
+                     + ($dims['d7_perkembangan_personal'] / max($bobot['perkembangan_personal'], 0.01))
+                     + ($dims['d8_ekonomi'] / max($bobot['ekonomi'], 0.01))
+                     + $dims['d1_sdm']
+                     + $dims['d2_ruang_terbuka']
+                     + $dims['d9_performa'];
+        $score = $weightedSum / 9;
+        
+        $result = array_merge(
+            ['city_id' => $cityId, 'year' => $year],
+            $dims,
+            [
+                'ipo_score' => $score,
+                'display_score' => round($score * 100, 2),
+                'kategori' => self::kategori($score),
+            ]
+        );
+
+        $adaData = count(array_filter($dims, fn($d) => $d)) > 0;
+        if (!$adaData) {
+            $result['_tanpaData'] = true;
+            return $result;
+        }
+
+        $city = DB::table('cities')->where('id', $cityId)->first();
+        DB::table('ipo_summary')->upsert(
+            array_merge($dims, [
+                'province_id' => $city->province_id,
+                'city_id' => $cityId,
+                'district_id' => null,
+                'year' => $year,
+                'ipo_score' => $score,
+                'kategori' => self::kategori($score),
+            ]),
+            ['province_id', 'city_id', 'district_id', 'year']
+        );
+        return $result;
+    }
+
+    // ===== DISTRICT-LEVEL CALCULATION =====
+    
+    public static function districtSDM(int $districtId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(s.indeks) v FROM sdm_olahraga s '
+            . 'WHERE s.district_id = ? AND s.year = ?', [$districtId, $year]);
+        return (float) ($r->v ?? 0);
+    }
+
+    public static function districtRuangTerbuka(int $districtId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(r.indeks) v FROM ruang_terbuka r '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'WHERE v.district_id = ? AND r.year = ?', [$districtId, $year]);
+        return (float) ($r->v ?? 0);
+    }
+
+    public static function districtLiterasi(int $districtId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(l.indeks) v FROM literasi_fisik l '
+            . 'JOIN respondents r ON l.respondent_id = r.id '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'WHERE v.district_id = ? AND l.year = ?', [$districtId, $year]);
+        return (float) ($r->v ?? 0);
+    }
+
+    public static function districtPartisipasi(int $districtId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT COUNT(CASE WHEN p.frekuensi >= 3 THEN 1 END) aktif, COUNT(*) total '
+            . 'FROM partisipasi p '
+            . 'JOIN respondents r ON p.respondent_id = r.id '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'WHERE v.district_id = ? AND p.year = ?', [$districtId, $year]);
+        if (!$r || !$r->total) return 0;
+        return $r->aktif / $r->total;
+    }
+
+    public static function districtKebugaran(int $districtId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(k.indeks) v FROM kebugaran k '
+            . 'JOIN respondents r ON k.respondent_id = r.id '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'WHERE v.district_id = ? AND k.year = ?', [$districtId, $year]);
+        return (float) ($r->v ?? 0);
+    }
+
+    public static function districtKesehatan(int $districtId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(k.indeks) v FROM kesehatan k '
+            . 'JOIN respondents r ON k.respondent_id = r.id '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'WHERE v.district_id = ? AND k.year = ?', [$districtId, $year]);
+        return (float) ($r->v ?? 0);
+    }
+
+    public static function districtPerkembangan(int $districtId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(pp.indeks) v FROM perkembangan_personal pp '
+            . 'JOIN respondents r ON pp.respondent_id = r.id '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'WHERE v.district_id = ? AND pp.year = ?', [$districtId, $year]);
+        return (float) ($r->v ?? 0);
+    }
+
+    public static function districtEkonomi(int $districtId, int $year): float
+    {
+        $r = DB::selectOne(
+            'SELECT AVG(e.total_belanja) v FROM ekonomi e '
+            . 'JOIN respondents r ON e.respondent_id = r.id '
+            . 'JOIN villages v ON r.village_id = v.id '
+            . 'WHERE v.district_id = ? AND e.year = ?', [$districtId, $year]);
+        return min(((float) ($r->v ?? 0)) / 5000000, 1);
+    }
+
+    public static function districtPerforma(int $districtId, int $year): float
+    {
+        // Performa per district tidak ada di tabel performa (hanya city-level)
+        // Return 0 untuk consistency
+        return 0;
+    }
+
+    public static function districtFull(int $districtId, int $year): array
+    {
+        $dims = [
+            'd1_sdm' => self::districtSDM($districtId, $year),
+            'd2_ruang_terbuka' => self::districtRuangTerbuka($districtId, $year),
+            'd3_literasi_fisik' => self::districtLiterasi($districtId, $year),
+            'd4_partisipasi' => self::districtPartisipasi($districtId, $year),
+            'd5_kebugaran' => self::districtKebugaran($districtId, $year),
+            'd6_kesehatan' => self::districtKesehatan($districtId, $year),
+            'd7_perkembangan_personal' => self::districtPerkembangan($districtId, $year),
+            'd8_ekonomi' => self::districtEkonomi($districtId, $year),
+            'd9_performa' => self::districtPerforma($districtId, $year),
+        ];
+        
+        // Baca bobot dinamis dari database
+        $bobot = self::getBobot($year);
+        
+        // Hitung skor dengan bobot (6 dimensi angket responden dibagi bobot, lalu + 3 dimensi lain, dibagi 9)
+        $weightedSum = ($dims['d3_literasi_fisik'] / max($bobot['literasi_fisik'], 0.01))
+                     + ($dims['d4_partisipasi'] / max($bobot['partisipasi'], 0.01))
+                     + ($dims['d5_kebugaran'] / max($bobot['kebugaran'], 0.01))
+                     + ($dims['d6_kesehatan'] / max($bobot['kesehatan'], 0.01))
+                     + ($dims['d7_perkembangan_personal'] / max($bobot['perkembangan_personal'], 0.01))
+                     + ($dims['d8_ekonomi'] / max($bobot['ekonomi'], 0.01))
+                     + $dims['d1_sdm']
+                     + $dims['d2_ruang_terbuka']
+                     + $dims['d9_performa'];
+        $score = $weightedSum / 9;
+        
+        $result = array_merge(
+            ['district_id' => $districtId, 'year' => $year],
+            $dims,
+            [
+                'ipo_score' => $score,
+                'display_score' => round($score * 100, 2),
+                'kategori' => self::kategori($score),
+            ]
+        );
+
+        $adaData = count(array_filter($dims, fn($d) => $d)) > 0;
+        if (!$adaData) {
+            $result['_tanpaData'] = true;
+            return $result;
+        }
+
+        $district = DB::table('districts')->where('id', $districtId)->first();
+        $city = DB::table('cities')->where('id', $district->city_id)->first();
+        DB::table('ipo_summary')->upsert(
+            array_merge($dims, [
+                'province_id' => $city->province_id,
+                'city_id' => $district->city_id,
+                'district_id' => $districtId,
+                'year' => $year,
+                'ipo_score' => $score,
+                'kategori' => self::kategori($score),
+            ]),
+            ['province_id', 'city_id', 'district_id', 'year']
         );
         return $result;
     }

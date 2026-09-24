@@ -48,7 +48,7 @@ class DimensionController extends Controller
         $q = DB::table("{$t} as x")->select('x.*');
         $this->applyJoins($q, $dim);
         $q->where('x.year', $year);
-        $this->applyScope($q, $dim, $provFilter ? (int) $provFilter : null);
+        $this->applyScope($q, $dim, $provFilter ? (int) $provFilter : null, $u);
         if ($s = trim((string) $request->query('q', ''))) {
             $q->where(function ($w) use ($s) {
                 $w->where('d.name', 'like', "%{$s}%")->orWhere('c.name', 'like', "%{$s}%");
@@ -65,11 +65,24 @@ class DimensionController extends Controller
         }
         $rows = $q->orderBy("x.{$sort}", $dir)->paginate(20)->withQueryString();
 
+        // **COUNTER RESPONDEN PER KECAMATAN**
+        $respondentCount = null;
+        $respondentLimit = 30;
+        if ($dim === 'responden' && $u->district_id) {
+            $respondentCount = DB::table('respondents as r')
+                ->join('villages as v', 'v.id', '=', 'r.village_id')
+                ->where('v.district_id', $u->district_id)
+                ->where('r.year', $year)
+                ->count();
+        }
+
         return view('data.list', [
             'dim' => $dim, 'label' => $c['label'], 'rows' => $rows, 'year' => $year,
             'years' => $this->yearOptions(), 'provinces' => $this->provinceOptions($u),
             'provFilter' => $provFilter, 'q' => $request->query('q', ''),
             'sort' => $sort, 'dir' => $dir, 'boleh' => $boleh,
+            'respondentCount' => $respondentCount,
+            'respondentLimit' => $respondentLimit,
         ]);
     }
 
@@ -96,12 +109,35 @@ class DimensionController extends Controller
         if (!Dimensions::assertOwnProvince($request->user(), $dim, $data)) {
             return $this->deny($request, 'Tidak bisa mengelola data provinsi lain');
         }
+        
+        // **VALIDASI 30 RESPONDEN PER KECAMATAN PER TAHUN**
+        if ($dim === 'responden') {
+            $district_id = $this->getDistrictFromVillageId($data['village_id']);
+            if ($district_id) {
+                $year = (int) $data['year'];
+                $count = DB::table('respondents as r')
+                    ->join('villages as v', 'v.id', '=', 'r.village_id')
+                    ->where('v.district_id', $district_id)
+                    ->where('r.year', $year)
+                    ->count();
+                
+                if ($count >= 30) {
+                    return $this->deny($request, "Kecamatan ini sudah mencapai batas maksimal 30 responden untuk tahun {$year}. Tidak dapat menambah responden lagi.");
+                }
+            }
+        }
+        
         foreach (Dimensions::derived($dim, $data) as $k => $v) $data[$k] = $v;
         if (in_array($dim, ['sdm', 'ruang-terbuka'], true)) $data['created_by'] = $request->user()->id;
         $id = DB::table($c['table'])->insertGetId($data);
         Audit::catat($request->user(), 'tambah', $c['table'], $id, ['dim' => $dim, 'data' => $data]);
         if ($request->expectsJson()) return response()->json(['id' => $id, 'message' => __('Data berhasil ditambahkan')]);
         return redirect("/data/{$dim}")->with('toast', ['type' => 'success', 'text' => __('Data berhasil ditambahkan.')]);
+    }
+    
+    private function getDistrictFromVillageId($village_id)
+    {
+        return DB::table('villages')->where('id', $village_id)->value('district_id');
     }
 
     public function edit(Request $request, string $dim, int $id)
@@ -406,20 +442,41 @@ class DimensionController extends Controller
         }
     }
 
-    private function applyScope($q, string $dim, ?int $prov): void
+    private function applyScope($q, string $dim, ?int $prov, $user = null): void
     {
-        if (!$prov) return;
+        if (!$prov && !$user) return;
+        
+        // Filter berdasarkan role user
+        $cityFilter = $user && $user->city_id ? $user->city_id : null;
+        $districtFilter = $user && $user->district_id ? $user->district_id : null;
+
         if ($dim === 'responden') {
-            $q->join('villages as v', 'v.id', '=', 'x.village_id')->join('districts as d', 'd.id', '=', 'v.district_id')
-                ->join('cities as c', 'c.id', '=', 'd.city_id')->where('c.province_id', $prov);
+            // JOIN sudah dilakukan di applyJoins(), cukup filter saja
+            if ($prov) $q->where('c.province_id', $prov);
+            if ($cityFilter) $q->where('c.id', $cityFilter);
+            if ($districtFilter) $q->where('d.id', $districtFilter);
         } elseif (in_array($dim, ['literasi-fisik', 'partisipasi', 'kebugaran', 'kesehatan', 'perkembangan-personal', 'ekonomi'], true)) {
-            $q->whereIn('x.respondent_id', function ($sq) use ($prov) {
+            $q->whereIn('x.respondent_id', function ($sq) use ($prov, $cityFilter, $districtFilter) {
                 $sq->select('r.id')->from('respondents as r')->join('villages as v', 'v.id', '=', 'r.village_id')
-                    ->join('districts as d', 'd.id', '=', 'v.district_id')->join('cities as c', 'c.id', '=', 'd.city_id')
-                    ->where('c.province_id', $prov);
+                    ->join('districts as d', 'd.id', '=', 'v.district_id')->join('cities as c', 'c.id', '=', 'd.city_id');
+                if ($prov) $sq->where('c.province_id', $prov);
+                if ($cityFilter) $sq->where('c.id', $cityFilter);
+                if ($districtFilter) $sq->where('d.id', $districtFilter);
             });
+        } elseif ($dim === 'sdm') {
+            if ($prov) $q->where('c.province_id', $prov);
+            if ($cityFilter) $q->where('c.id', $cityFilter);
+            if ($districtFilter) $q->where('d.id', $districtFilter);
+        } elseif ($dim === 'ruang-terbuka') {
+            if ($prov) $q->where('c.province_id', $prov);
+            if ($cityFilter) $q->where('c.id', $cityFilter);
+            if ($districtFilter) $q->where('d.id', $districtFilter);
+        } elseif ($dim === 'performa') {
+            if ($prov) $q->where('p.id', $prov);
+            if ($cityFilter) $q->where('c.id', $cityFilter);
         } else {
-            $q->where('c.province_id', $prov);
+            if ($prov) $q->where('c.province_id', $prov);
+            if ($cityFilter) $q->where('c.id', $cityFilter);
         }
     }
 
@@ -445,21 +502,31 @@ class DimensionController extends Controller
     {
         $opts = [];
         $prov = $u->province_id ?: $provFilter;
+        $cityFilter = $u->city_id ?? null;
+        $districtFilter = $u->district_id ?? null;
         if (in_array($dim, ['sdm'], true)) {
             $q = DB::table('districts as d')->join('cities as c', 'c.id', '=', 'd.city_id')
                 ->select('d.id', 'd.name', 'c.name as city_name');
             if ($prov) $q->where('c.province_id', $prov);
+            if ($cityFilter) $q->where('c.id', $cityFilter);
+            if ($districtFilter) $q->where('d.id', $districtFilter);
             $opts['districts'] = $q->orderBy('c.name')->orderBy('d.name')->limit(500)->get();
         }
         if (in_array($dim, ['ruang-terbuka', 'responden'], true)) {
             $q = DB::table('villages as v')->join('districts as d', 'd.id', '=', 'v.district_id')
-                ->join('cities as c', 'c.id', '=', 'd.city_id')->select('v.id', 'v.name', 'd.name as district_name', 'c.name as city_name');
+                ->join('cities as c', 'c.id', '=', 'd.city_id')
+                ->select('v.id', 'v.name', 'd.name as district_name', 'd.id as district_id',
+                    'c.name as city_name', 'c.id as city_id',
+                    'c.province_id');
             if ($prov) $q->where('c.province_id', $prov);
+            if ($cityFilter) $q->where('c.id', $cityFilter);
+            if ($districtFilter) $q->where('d.id', $districtFilter);
             $opts['villages'] = $q->orderBy('c.name')->orderBy('d.name')->orderBy('v.name')->limit(500)->get();
         }
         if ($dim === 'performa') {
             $q = DB::table('cities as c')->join('provinces as p', 'p.id', '=', 'c.province_id')->select('c.id', 'c.name', 'p.name as province_name');
             if ($prov) $q->where('c.province_id', $prov);
+            if ($cityFilter) $q->where('c.id', $cityFilter);
             $opts['cities'] = $q->orderBy('p.name')->orderBy('c.name')->limit(500)->get();
         }
         if (in_array($dim, ['literasi-fisik', 'partisipasi', 'kebugaran', 'kesehatan', 'perkembangan-personal', 'ekonomi'], true)) {
@@ -468,6 +535,8 @@ class DimensionController extends Controller
                 ->join('districts as d', 'd.id', '=', 'v.district_id')->join('cities as c', 'c.id', '=', 'd.city_id')
                 ->select('r.id', 'r.age', 'r.gender', 'v.name as village_name', 'c.name as city_name')->where('r.year', $y);
             if ($prov) $q->where('c.province_id', $prov);
+            if ($cityFilter) $q->where('c.id', $cityFilter);
+            if ($districtFilter) $q->where('d.id', $districtFilter);
             $opts['respondents'] = $q->orderBy('c.name')->orderBy('r.id')->limit(500)->get();
         }
         return $opts;

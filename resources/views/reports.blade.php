@@ -3,7 +3,7 @@
 
 @section('content')
 @php
-  $tabs = ['index' => 'Indeks IPO', 'ranking' => 'Peringkat Provinsi', 'trend' => 'Tren Indeks', 'dimensions' => 'Analisis Dimensi'];
+  $tabs = ['index' => 'Indeks IPO', 'ranking' => 'Peringkat Kabupaten/Kota', 'trend' => 'Tren Indeks', 'dimensions' => 'Analisis Dimensi'];
   $katClass = ['Baik' => 'badge-baik', 'Cukup' => 'badge-cukup', 'Kurang' => 'badge-kurang', 'Sangat Kurang' => 'badge-sangat-kurang'];
   $q = http_build_query(array_filter(['tab' => $tab, 'year' => $year, 'province_id' => $pid]));
 @endphp
@@ -50,22 +50,22 @@
   @elseif($tab === 'ranking' && isset($ranking))
     <div class="card" style="padding:20px" id="ctk-ranking">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-      <h2 style="font-size:15px;font-weight:700;color:var(--ink)">Peringkat Provinsi</h2>
+      <h2 style="font-size:15px;font-weight:700;color:var(--ink)">Peringkat Kabupaten/Kota</h2>
       <button type="button" class="btn btn-secondary btn-sm no-print" onclick="cetakBagian('ctk-ranking')">🖨 Bagian</button>
       </div>
       <p style="font-size:12px;color:var(--ink-3)">Tahun {{ $year }}</p>
       <form method="GET" action="/laporan" class="toolbar no-print" style="margin-top:10px">
         <input type="hidden" name="tab" value="ranking">
         <input type="hidden" name="year" value="{{ $year }}">
-        <input type="text" name="q" class="input" style="max-width:220px" placeholder="Filter provinsi…" value="{{ $rq ?? '' }}">
+        <input type="text" name="q" class="input" style="max-width:220px" placeholder="Filter kabupaten/kota…" value="{{ $rq ?? '' }}">
         <button class="btn btn-secondary btn-sm" type="submit">Filter</button>
       </form>
       <div class="table-wrap" style="margin-top:12px;border:none">
         <table class="table">
-          <thead><tr><th>NO</th><th><a href="/laporan?tab=ranking&year={{ $year }}&q={{ urlencode($rq) }}&urut=nama" style="color:inherit">PROVINSI @if($urut === 'nama')▲@endif</a></th><th><a href="/laporan?tab=ranking&year={{ $year }}&q={{ urlencode($rq) }}" style="color:inherit">SKOR @if($urut === 'skor')▼@endif</a></th><th>KATEGORI</th></tr></thead>
+          <thead><tr><th>NO</th><th><a href="/laporan?tab=ranking&year={{ $year }}&q={{ urlencode($rq) }}&urut=nama" style="color:inherit">KABUPATEN/KOTA @if($urut === 'nama')▲@endif</a></th><th><a href="/laporan?tab=ranking&year={{ $year }}&q={{ urlencode($rq) }}" style="color:inherit">SKOR @if($urut === 'skor')▼@endif</a></th><th>KATEGORI</th></tr></thead>
           <tbody>
             @foreach($ranking as $i => $r)
-              <tr><td>{{ $i + 1 }}</td><td>{{ $r->province_name }}</td><td style="font-weight:700">{{ (int) round($r->ipo_score * 100) }}</td><td><span class="badge {{ $katClass[$r->kategori] ?? 'badge-neutral' }}">{{ $r->kategori }}</span></td></tr>
+              <tr><td>{{ $i + 1 }}</td><td>{{ $r->city_name }}</td><td style="font-weight:700">{{ (int) round($r->ipo_score * 100) }}</td><td><span class="badge {{ $katClass[$r->kategori] ?? 'badge-neutral' }}">{{ $r->kategori }}</span></td></tr>
             @endforeach
           </tbody>
         </table>

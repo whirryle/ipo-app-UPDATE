@@ -16,7 +16,7 @@
 <body>
 <div style="border-bottom:3px double #4C1D95;padding-bottom:6px;margin-bottom:8px">
 <div style="font-size:14pt;font-weight:bold;color:#4C1D95">INDEKS PEMBANGUNAN OLAHRAGA (IPO)</div>
-<div class="meta">Perbandingan antar provinsi · Tahun {{ $year }}</div>
+<div class="meta">Perbandingan antar kabupaten/kota Kalimantan Timur · Tahun {{ $year }}</div>
 </div>
 <table>
 <thead><tr><th>Dimensi</th>@foreach($dims as $d)<th>{{ $d['nama'] }}</th>@endforeach</tr></thead>

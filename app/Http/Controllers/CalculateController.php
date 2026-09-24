@@ -44,9 +44,36 @@ class CalculateController extends Controller
         $u = $request->user();
         $year = (int) ($request->query('year') ?: IpoCalculator::latestYear());
         $pid = $u->province_id ? (int) $u->province_id : (int) ($request->query('province_id') ?: 1);
-        $lama = (float) (DB::table('ipo_summary')->where('province_id', $pid)->where('year', $year)->value('ipo_score') ?? 0);
+        $lama = (float) (DB::table('ipo_summary')
+            ->where('province_id', $pid)
+            ->whereNull('city_id')
+            ->whereNull('district_id')
+            ->where('year', $year)->value('ipo_score') ?? 0);
+        
+        // Recalculate province-level
         IpoCalculator::full($pid, $year);
-        $baru = (float) (DB::table('ipo_summary')->where('province_id', $pid)->where('year', $year)->value('ipo_score') ?? 0);
+        
+        // Recalculate city-level
+        $cities = DB::table('cities')->where('province_id', $pid)->get();
+        foreach ($cities as $c) {
+            IpoCalculator::cityFull($c->id, $year);
+        }
+        
+        // Recalculate district-level
+        $districts = DB::table('districts')
+            ->join('cities', 'cities.id', '=', 'districts.city_id')
+            ->where('cities.province_id', $pid)
+            ->select('districts.*')
+            ->get();
+        foreach ($districts as $d) {
+            IpoCalculator::districtFull($d->id, $year);
+        }
+        
+        $baru = (float) (DB::table('ipo_summary')
+            ->where('province_id', $pid)
+            ->whereNull('city_id')
+            ->whereNull('district_id')
+            ->where('year', $year)->value('ipo_score') ?? 0);
         if (abs($baru - $lama) * 100 >= 3) {
             DB::table('notifikasi')->insert(['province_id' => $pid, 'year' => $year, 'skor_lama' => round($lama * 100, 2), 'skor_baru' => round($baru * 100, 2)]);
         }
@@ -62,7 +89,11 @@ class CalculateController extends Controller
             if ($request->expectsJson()) return response()->json(['error' => __('Tidak bisa melihat riwayat provinsi lain')], 403);
             abort(403, __('Tidak bisa melihat riwayat provinsi lain'));
         }
-        $data = DB::table('ipo_summary')->where('province_id', $provinceId)->orderBy('year')->get();
+        $data = DB::table('ipo_summary')
+            ->where('province_id', $provinceId)
+            ->whereNull('city_id')
+            ->whereNull('district_id')
+            ->orderBy('year')->get();
         if ($request->expectsJson()) return response()->json(['data' => $data]);
         return redirect('/grafik');
     }

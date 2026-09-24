@@ -4,7 +4,7 @@
 @section('content')
 @php
   $u = auth()->user();
-  $canWrite = in_array($u->role, ['admin', 'operator']);
+  $canWrite = in_array($u->role, ['admin_city', 'operator']);
   $cols = [
     'sdm' => [['k' => 'district_name', 'l' => 'Kecamatan'], ['k' => 'city_name', 'l' => 'Kota/Kab'], ['k' => 'jumlah_penduduk_5plus', 'l' => 'Penduduk 5+', 'n' => 1], ['k' => 'jumlah_sdm', 'l' => 'Jumlah SDM', 'n' => 1]],
     'ruang-terbuka' => [['k' => 'village_name', 'l' => 'Lokasi'], ['k' => 'district_name', 'l' => 'Kecamatan'], ['k' => 'luas_m2', 'l' => 'Luas (m²)', 'n' => 1], ['k' => 'jumlah_penduduk_5plus', 'l' => 'Penduduk 5+', 'n' => 1]],
@@ -32,9 +32,21 @@
     <div>
       <a href="/data" style="font-size:12px;color:var(--ink-3)">← Kembali</a>
       <h1 style="font-size:18px;font-weight:700;color:var(--ink)">{{ $label }}</h1>
+      @if($dim === 'responden' && isset($respondentCount))
+        <p style="font-size:13px;color:var(--ink-2);margin-top:4px">
+          <strong>{{ $respondentCount }}/{{ $respondentLimit }}</strong> responden terisi untuk kecamatan Anda (tahun {{ $year }})
+          @if($respondentCount >= $respondentLimit)
+            <span style="color:var(--red);font-weight:600">— Batas maksimal tercapai</span>
+          @endif
+        </p>
+      @endif
     </div>
     @if($canWrite)
-      <a href="/data/{{ $dim }}/tambah?year={{ $year }}" class="btn btn-primary btn-sm no-print">+ Tambah</a>
+      @if($dim !== 'responden' || !isset($respondentCount) || $respondentCount < $respondentLimit)
+        <a href="/data/{{ $dim }}/tambah?year={{ $year }}" class="btn btn-primary btn-sm no-print">+ Tambah</a>
+      @else
+        <button class="btn btn-primary btn-sm no-print" disabled title="Batas maksimal 30 responden tercapai">+ Tambah</button>
+      @endif
       <a href="/data/{{ $dim }}/impor" class="btn btn-secondary btn-sm no-print">⭳ Impor CSV</a>
       <button type="submit" form="bulkForm" class="btn btn-danger btn-sm no-print" onclick="return confirm('Hapus semua baris terpilih?')">{{ __('Hapus terpilih') }}</button>
     @endif

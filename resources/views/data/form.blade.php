@@ -54,9 +54,17 @@
             @foreach($opts['districts'] as $o)<option value="{{ $o->id }}" {{ (string)$val($f) === (string)$o->id ? 'selected' : '' }}>{{ $o->name }} — {{ $o->city_name }}</option>@endforeach
           </select>
         @elseif($f === 'village_id' && isset($opts['villages']))
-          <select id="f-{{ $f }}" name="{{ $f }}" class="input" required>
+          <select id="f-{{ $f }}" name="{{ $f }}" class="input" required onchange="autoFillLocation()">
             <option value="">Pilih desa/kelurahan</option>
-            @foreach($opts['villages'] as $o)<option value="{{ $o->id }}" {{ (string)$val($f) === (string)$o->id ? 'selected' : '' }}>{{ $o->name }} — {{ $o->district_name }}, {{ $o->city_name }}</option>@endforeach
+            @foreach($opts['villages'] as $o)
+              <option value="{{ $o->id }}" 
+                data-district-id="{{ $o->district_id }}"
+                data-city-id="{{ $o->city_id }}"
+                data-province-id="{{ $o->province_id }}"
+                {{ (string)$val($f) === (string)$o->id ? 'selected' : '' }}>
+                {{ $o->name }} — Kec. {{ $o->district_name }}, {{ $o->city_name }}
+              </option>
+            @endforeach
           </select>
         @elseif($f === 'city_id' && isset($opts['cities']))
           <select id="f-{{ $f }}" name="{{ $f }}" class="input" required>
@@ -91,7 +99,76 @@
         @endif
       </div>
     @endforeach
+    
+    {{-- HIDDEN FIELDS untuk auto-fill kecamatan, kota, provinsi --}}
+    <input type="hidden" id="auto-district-id" name="auto_district_id" value="">
+    <input type="hidden" id="auto-city-id" name="auto_city_id" value="">
+    <input type="hidden" id="auto-province-id" name="auto_province_id" value="">
+
+    {{-- DISPLAY OTOMATIS: pilih desa → auto-fill kecamatan, kota, provinsi --}}
+    @if(in_array('village_id', $fields))
+    <div id="location-display" style="display:none;padding:14px;border-radius:10px;background:linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);border-left:4px solid var(--brand-700,#5B21B6);font-size:13px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5B21B6" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <strong style="color:var(--brand-700,#5B21B6)">Lokasi Otomatis Terdeteksi:</strong>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr;gap:6px;padding-left:26px">
+        <div><span style="color:var(--ink-3);font-size:11px">Kecamatan</span><br><strong id="auto-district-text">—</strong></div>
+        <div><span style="color:var(--ink-3);font-size:11px">Kabupaten/Kota</span><br><strong id="auto-city-text">—</strong></div>
+        <div><span style="color:var(--ink-3);font-size:11px">Provinsi</span><br><strong id="auto-province-text">—</strong></div>
+      </div>
+    </div>
+    @endif
+
     <button type="submit" class="btn btn-primary btn-block">Simpan</button>
   </form>
 </div>
+
+@if(in_array('village_id', $fields))
+<script>
+// Auto-fill kecamatan, kota, provinsi saat user pilih desa
+function autoFillLocation() {
+  const villageSelect = document.getElementById('f-village_id');
+  if (!villageSelect) return;
+  const selected = villageSelect.options[villageSelect.selectedIndex];
+  if (!selected || !selected.value) {
+    document.getElementById('location-display').style.display = 'none';
+    return;
+  }
+  
+  // Ambil data dari data-* attributes
+  const districtId = selected.getAttribute('data-district-id');
+  const cityId = selected.getAttribute('data-city-id');
+  const provinceId = selected.getAttribute('data-province-id');
+  
+  // Set hidden fields
+  document.getElementById('auto-district-id').value = districtId || '';
+  document.getElementById('auto-city-id').value = cityId || '';
+  document.getElementById('auto-province-id').value = provinceId || '';
+  
+  // Parse label untuk extract kecamatan & kota
+  // Format: "Desa A — Kec. Tenggarong, Kabupaten Kutai Kartanegara"
+  const label = selected.textContent.trim();
+  const parts = label.split('—');
+  const kecKota = parts[1] ? parts[1].trim() : '';
+  const kecParts = kecKota.split(',');
+  const kecamatan = kecParts[0].replace(/^Kec\.\s*/i, '').trim();
+  const kota = kecParts[1] ? kecParts[1].trim() : '';
+  
+  // Tampilkan display
+  document.getElementById('auto-district-text').textContent = kecamatan || '—';
+  document.getElementById('auto-city-text').textContent = kota || '—';
+  document.getElementById('auto-province-text').textContent = 'Kalimantan Timur';
+  document.getElementById('location-display').style.display = 'block';
+}
+
+// Trigger on load (untuk edit mode)
+document.addEventListener('DOMContentLoaded', function() {
+  const villageSelect = document.getElementById('f-village_id');
+  if (villageSelect && villageSelect.value) {
+    autoFillLocation();
+  }
+});
+</script>
+@endif
 @endsection

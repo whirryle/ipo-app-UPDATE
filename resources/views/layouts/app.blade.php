@@ -69,12 +69,17 @@
 <body>
 @php
   $u = auth()->user();
-  $isAdmin = $u && in_array($u->role, ['admin','operator']);
-  $isSuper = $u && $u->role === 'admin' && $u->province_id === null;
+  $isAdmin = $u && in_array($u->role, ['superadmin','admin_city','operator']);
+  $isSuper = $u && ($u->role === 'superadmin' || ($u->role === 'admin' && $u->province_id === null));
   $seg = request()->segment(1);
   $active = fn($k) => $seg === $k ? 'active' : '';
   $guestName = $u->full_name ?? 'Tamu';
-  $guestRole = !$u ? 'Tamu' : ($u->role === 'admin' && $u->province_id === null ? 'Superadmin' : ucfirst($u->role));
+  $guestRole = !$u ? 'Tamu' : match($u->role) {
+    'superadmin' => 'Superadmin',
+    'admin_city' => 'Admin Kota',
+    'operator' => 'Operator',
+    default => ucfirst($u->role),
+  };
   $guestInitial = strtoupper(substr($u->full_name ?? '?', 0, 1));
   $notifCount = 0;
   if ($u) {
@@ -98,7 +103,7 @@
       <a href="/hitung" class="{{ $active('hitung') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 7h8M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/></svg><span>{{ __('Perhitungan Indeks') }}<small>{{ __('Hitung nilai indeks') }}</small></span></a>
       @endif
       <a href="/grafik" class="{{ $active('grafik') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg><span>{{ __('Grafik Indeks') }}<small>{{ __('Lihat perkembangan') }}</small></span></a>
-      <a href="/banding" class="{{ $active('banding') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg><span>{{ __('Banding') }}<small>{{ __('Antar provinsi') }}</small></span></a>
+      <a href="/banding" class="{{ $active('banding') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg><span>{{ __('Banding') }}<small>{{ __('Antar Kabupaten/Kota') }}</small></span></a>
       <a href="/laporan" class="{{ $active('laporan') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h7M9 17h7"/></svg><span>{{ __('Laporan') }}<small>{{ __('Cetak & ekspor') }}</small></span></a>
       <a href="/notifikasi" class="{{ $active('notifikasi') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span>{{ __('Notifikasi') }}@if($notifCount)<b style="background:#fff;color:#5B21B6;border-radius:99px;font-size:10px;padding:1px 7px;margin-left:6px">{{ $notifCount }}</b>@endif<small>{{ __('Perubahan skor') }}</small></span></a>
       <a href="/bantuan" class="{{ $active('bantuan') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.8.3-.9 1-.9 1.7"/><path d="M12 17h.01"/></svg><span>{{ __('Bantuan') }}<small>{{ __('Tips & bantuan') }}</small></span></a>
@@ -110,6 +115,9 @@
       @endif
       @if($isSuper)
       <a href="/sistem" class="{{ $active('sistem') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg><span>{{ __('Sistem') }}<small>{{ __('Cadangan DB') }}</small></span></a>
+      @endif
+      @if($isSuper)
+      <a href="/bobot" class="{{ $active('bobot') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l3 1m0 0l-3 9a5 5 0 0 0 6 3l3-9M6 7l13-4M19 3v6a5 5 0 0 1-6 3"/></svg><span>{{ __('Pengaturan Bobot') }}<small>{{ __('Bobot dimensi angket') }}</small></span></a>
       @endif
       @if($isAdmin)
       <a href="/sampah" class="{{ $active('sampah') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg><span>{{ __('Tong Sampah') }}<small>{{ __('Pulihkan data') }}</small></span></a>

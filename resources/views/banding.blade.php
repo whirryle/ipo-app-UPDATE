@@ -1,29 +1,39 @@
 @extends('layouts.app')
-@section('title', 'Banding Provinsi — IPO')
+@section('title', 'Banding Kabupaten/Kota — IPO')
 
 @section('content')
 <div class="anim-fade-up" style="display:flex;flex-direction:column;gap:14px">
   <div class="page-head">
     <div>
       <a href="/dashboard" style="font-size:12px;color:var(--ink-3)">← Kembali</a>
-      <h1 style="font-size:18px;font-weight:600;color:var(--ink)">Banding Provinsi</h1>
+      <h1 style="font-size:18px;font-weight:600;color:var(--ink)">Banding Kabupaten/Kota</h1>
     </div>
     <form method="GET" action="/banding" class="toolbar no-print card" style="padding:12px">
-      @for($i = 0; $i < 4; $i++)
-        <select name="p[]" class="input" style="width:auto;max-width:170px">
-          <option value="">—</option>
-          @foreach($provinces as $p)
-            <option value="{{ $p->id }}" {{ in_array($p->id, $pilih) && array_search($p->id, $pilih) === $i ? 'selected' : '' }}>{{ $p->name }}</option>
-          @endforeach
-        </select>
-      @endfor
+      <select name="c[]" class="input" style="width:auto;max-width:200px" id="banding-city-1">
+        <option value="">Pilih Kabupaten/Kota 1</option>
+        @foreach($cities as $c)
+          <option value="{{ $c->id }}">{{ $c->name }}</option>
+        @endforeach
+      </select>
+      <select name="c[]" class="input" style="width:auto;max-width:200px" id="banding-city-2">
+        <option value="">Pilih Kabupaten/Kota 2</option>
+        @foreach($cities as $c)
+          <option value="{{ $c->id }}">{{ $c->name }}</option>
+        @endforeach
+      </select>
+      <select name="c[]" class="input" style="width:auto;max-width:200px" id="banding-city-3">
+        <option value="">Pilih Kabupaten/Kota 3</option>
+        @foreach($cities as $c)
+          <option value="{{ $c->id }}">{{ $c->name }}</option>
+        @endforeach
+      </select>
       <select name="year" class="input" style="width:auto">
         @foreach($years as $y)<option value="{{ $y }}" {{ (int)$year === (int)$y ? 'selected' : '' }}>{{ $y }}</option>@endforeach
       </select>
       <button class="btn btn-primary btn-sm" type="submit">Bandingkan</button>
     </form>
     <div class="no-print" style="display:flex;gap:8px">
-      <a class="btn btn-secondary btn-sm" href="/banding?p[]={{ implode('&p[]=', $pilih) }}&year={{ $year }}&ekspor=pdf">Ekspor PDF</a>
+      <a class="btn btn-secondary btn-sm" href="/banding?c[]={{ implode('&c[]=', $pilih) }}&year={{ $year }}&ekspor=pdf">Ekspor PDF</a>
     </div>
   </div>
   @if(count($dims))
@@ -33,7 +43,7 @@
   <div class="table-wrap">
     <table class="table">
       <thead><tr><th>Dimensi</th>@foreach($dims as $d)<th>{{ $d['nama'] }}</th>@endforeach</tr></thead>
-      <tbody>
+      <tbody>gi 
         @foreach($labels as $k => $label)
           <tr><td><b>{{ $label }}</b></td>@foreach($dims as $d)<td>{{ $d['skor'][$k] }}</td>@endforeach</tr>
         @endforeach
@@ -49,6 +59,45 @@
 <script src="/vendor/chart.umd.js"></script>
 <script type="application/json" id="banding-data">@json($dims)</script>
 <script>
+// Prevent duplicate city selection
+(function () {
+  var selects = [
+    document.getElementById('banding-city-1'),
+    document.getElementById('banding-city-2'),
+    document.getElementById('banding-city-3')
+  ];
+  
+  function updateDisabledOptions() {
+    var selected = selects.map(function(s) { return s ? s.value : ''; }).filter(Boolean);
+    
+    selects.forEach(function(select) {
+      if (!select) return;
+      var currentValue = select.value;
+      
+      Array.from(select.options).forEach(function(option) {
+        if (!option.value) {
+          option.disabled = false;
+          return;
+        }
+        
+        if (selected.indexOf(option.value) !== -1 && option.value !== currentValue) {
+          option.disabled = true;
+        } else {
+          option.disabled = false;
+        }
+      });
+    });
+  }
+  
+  selects.forEach(function(select) {
+    if (select) {
+      select.addEventListener('change', updateDisabledOptions);
+    }
+  });
+  
+  updateDisabledOptions();
+})();
+
 (function () {
   var cv = document.getElementById('bandingChart');
   if (!cv) return;

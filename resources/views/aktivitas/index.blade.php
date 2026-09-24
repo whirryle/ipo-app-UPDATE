@@ -34,7 +34,26 @@
             <td><span class="badge badge-neutral">{{ $l->aksi }}</span></td>
             <td>{{ $l->tabel }}</td>
             <td>{{ $l->row_id ?? '—' }}</td>
-            <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">{{ $l->detail ? substr($l->detail, 0, 90) : '—' }}</td>
+            <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">
+              @if($l->detail)
+                @php
+                  $detail = json_decode($l->detail, true);
+                  if (is_array($detail)) {
+                    $parts = [];
+                    foreach ($detail as $k => $v) {
+                      if (is_string($v) || is_numeric($v)) {
+                        $parts[] = ucfirst(str_replace('_', ' ', $k)) . ': ' . $v;
+                      }
+                    }
+                    echo implode(', ', $parts);
+                  } else {
+                    echo substr($l->detail, 0, 90);
+                  }
+                @endphp
+              @else
+                —
+              @endif
+            </td>
           </tr>
         @empty
           <tr><td colspan="6" style="text-align:center;color:var(--ink-3)">Belum ada aktivitas.</td></tr>
