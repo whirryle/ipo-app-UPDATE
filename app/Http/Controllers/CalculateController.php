@@ -41,45 +41,61 @@ class CalculateController extends Controller
 
     public function recalculate(Request $request)
     {
-        $u = $request->user();
-        $year = (int) ($request->query('year') ?: IpoCalculator::latestYear());
-        $pid = $u->province_id ? (int) $u->province_id : (int) ($request->query('province_id') ?: 1);
-        $lama = (float) (DB::table('ipo_summary')
-            ->where('province_id', $pid)
-            ->whereNull('city_id')
-            ->whereNull('district_id')
-            ->where('year', $year)->value('ipo_score') ?? 0);
-        
-        // Recalculate province-level
-        IpoCalculator::full($pid, $year);
-        
-        // Recalculate city-level
-        $cities = DB::table('cities')->where('province_id', $pid)->get();
-        foreach ($cities as $c) {
-            IpoCalculator::cityFull($c->id, $year);
+        try {
+            $u = $request->user();
+            $year = (int) ($request->query('year') ?: IpoCalculator::latestYear());
+            $pid = $u->province_id ? (int) $u->province_id : (int) ($request->query('province_id') ?: 1);
+            $lama = (float) (DB::table('ipo_summary')
+                ->where('province_id', $pid)
+                ->whereNull('city_id')
+                ->whereNull('district_id')
+                ->where('year', $year)->value('ipo_score') ?? 0);
+            
+            // Recalculate province-level
+            IpoCalculator::full($pid, $year);
+            
+            // Recalculate city-level
+            $cities = DB::table('cities')->where('province_id', $pid)->get();
+            foreach ($cities as $c) {
+                IpoCalculator::cityFull($c->id, $year);
+            }
+            
+            // Recalculate district-level
+            $districts = DB::table('districts')
+                ->join('cities', 'cities.id', '=', 'districts.city_id')
+                ->where('cities.province_id', $pid)
+                ->select('districts.*')
+                ->get();
+            foreach ($districts as $d) {
+                IpoCalculator::districtFull($d->id, $year);
+            }
+            
+            $baru = (float) (DB::table('ipo_summary')
+                ->where('province_id', $pid)
+                ->whereNull('city_id')
+                ->whereNull('district_id')
+                ->where('year', $year)->value('ipo_score') ?? 0);
+            if (abs($baru - $lama) * 100 >= 3) {
+                DB::table('notifikasi')->insert(['province_id' => $pid, 'year' => $year, 'skor_lama' => round($lama * 100, 2), 'skor_baru' => round($baru * 100, 2)]);
+            }
+            Audit::catat($u, 'hitung', 'ipo_summary', null, ['province_id' => $pid, 'year' => $year]);
+            if ($request->expectsJson()) return response()->json(['message' => __('Indeks berhasil dihitung ulang')]);
+            return redirect("/hitung?year={$year}&province_id={$pid}")->with('toast', ['type' => 'success', 'text' => 'Indeks berhasil dihitung ulang.']);
+        } catch (\Exception $e) {
+            \Log::error('Error pada recalculate IPO', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'user_id' => $request->user()->id,
+                'province_id' => $request->query('province_id', 1),
+                'year' => $request->query('year'),
+            ]);
+            if ($request->expectsJson()) {
+                return response()->json(['error' => 'Terjadi kesalahan saat menghitung ulang. Silakan coba lagi nanti.'], 500);
+            }
+            return redirect("/hitung?year={$year}&province_id={$pid}")
+                ->with('toast', ['type' => 'error', 'text' => 'Terjadi kesalahan saat menghitung ulang. Silakan coba lagi nanti.']);
         }
-        
-        // Recalculate district-level
-        $districts = DB::table('districts')
-            ->join('cities', 'cities.id', '=', 'districts.city_id')
-            ->where('cities.province_id', $pid)
-            ->select('districts.*')
-            ->get();
-        foreach ($districts as $d) {
-            IpoCalculator::districtFull($d->id, $year);
-        }
-        
-        $baru = (float) (DB::table('ipo_summary')
-            ->where('province_id', $pid)
-            ->whereNull('city_id')
-            ->whereNull('district_id')
-            ->where('year', $year)->value('ipo_score') ?? 0);
-        if (abs($baru - $lama) * 100 >= 3) {
-            DB::table('notifikasi')->insert(['province_id' => $pid, 'year' => $year, 'skor_lama' => round($lama * 100, 2), 'skor_baru' => round($baru * 100, 2)]);
-        }
-        Audit::catat($u, 'hitung', 'ipo_summary', null, ['province_id' => $pid, 'year' => $year]);
-        if ($request->expectsJson()) return response()->json(['message' => __('Indeks berhasil dihitung ulang')]);
-        return redirect("/hitung?year={$year}&province_id={$pid}")->with('toast', ['type' => 'success', 'text' => 'Indeks berhasil dihitung ulang.']);
     }
 
     public function history(Request $request, int $provinceId)

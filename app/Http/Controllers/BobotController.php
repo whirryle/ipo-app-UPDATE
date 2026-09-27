@@ -72,30 +72,44 @@ class BobotController extends Controller
     {
         abort_unless($request->user()->isSuperAdmin(), 403, 'Hanya Superadmin yang dapat mengatur bobot');
         
-        $bobot = Bobot::findOrFail($id);
+        try {
+            $bobot = Bobot::findOrFail($id);
 
-        $data = $request->validate([
-            'literasi_fisik' => 'required|numeric|min:0.01|max:100',
-            'partisipasi' => 'required|numeric|min:0.01|max:100',
-            'perkembangan_personal' => 'required|numeric|min:0.01|max:100',
-            'kesehatan' => 'required|numeric|min:0.01|max:100',
-            'ekonomi' => 'required|numeric|min:0.01|max:100',
-            'kebugaran' => 'required|numeric|min:0.01|max:100',
-        ], [
-            '*.required' => 'Bobot wajib diisi',
-            '*.numeric' => 'Bobot harus berupa angka',
-            '*.min' => 'Bobot minimal 0.01',
-            '*.max' => 'Bobot maksimal 100',
-        ]);
+            $data = $request->validate([
+                'literasi_fisik' => 'required|numeric|min:0.01|max:100',
+                'partisipasi' => 'required|numeric|min:0.01|max:100',
+                'perkembangan_personal' => 'required|numeric|min:0.01|max:100',
+                'kesehatan' => 'required|numeric|min:0.01|max:100',
+                'ekonomi' => 'required|numeric|min:0.01|max:100',
+                'kebugaran' => 'required|numeric|min:0.01|max:100',
+            ], [
+                '*.required' => 'Bobot wajib diisi',
+                '*.numeric' => 'Bobot harus berupa angka',
+                '*.min' => 'Bobot minimal 0.01',
+                '*.max' => 'Bobot maksimal 100',
+            ]);
 
-        $data['user_id'] = $request->user()->id;
+            $data['user_id'] = $request->user()->id;
 
-        $bobot->update($data);
+            $bobot->update($data);
 
-        return redirect('/bobot')->with('toast', [
-            'type' => 'success',
-            'text' => 'Bobot tahun ' . $bobot->year . ' berhasil diubah'
-        ]);
+            return redirect('/bobot')->with('toast', [
+                'type' => 'success',
+                'text' => 'Bobot tahun ' . $bobot->year . ' berhasil diubah'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error pada update bobot', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'user_id' => $request->user()->id,
+                'bobot_id' => $id,
+            ]);
+            return back()->with('toast', [
+                'type' => 'error',
+                'text' => 'Terjadi kesalahan saat update bobot. Silakan coba lagi nanti.'
+            ])->withInput();
+        }
     }
 
     public function destroy(Request $request, $id)

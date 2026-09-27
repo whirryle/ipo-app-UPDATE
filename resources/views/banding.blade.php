@@ -43,7 +43,7 @@
   <div class="table-wrap">
     <table class="table">
       <thead><tr><th>Dimensi</th>@foreach($dims as $d)<th>{{ $d['nama'] }}</th>@endforeach</tr></thead>
-      <tbody>gi 
+      <tbody>
         @foreach($labels as $k => $label)
           <tr><td><b>{{ $label }}</b></td>@foreach($dims as $d)<td>{{ $d['skor'][$k] }}</td>@endforeach</tr>
         @endforeach
@@ -103,18 +103,18 @@
   if (!cv) return;
   var rows = JSON.parse(document.getElementById('banding-data').textContent);
   var dark = document.documentElement.dataset.theme === 'dark';
-  var tick = dark ? '#C9C5DE' : '#4B5563';
+  var tick = dark ? 'var(--ink-2)' : 'var(--ink-3)';
   var chart = new Chart(cv, { type: 'bar',
     data: { labels: rows.map(function (r) { return r.nama; }),
       datasets: [{ label: 'IPO {{ $year }}', data: rows.map(function (r) { return r.ipo; }),
-        backgroundColor: '#6D28D9', borderRadius: 8 }]},
+        backgroundColor: 'var(--brand-600)', borderRadius: 8 }]},
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: { x: { ticks: { color: tick, font: { size: 10 } } },
         y: { min: 0, max: 100, ticks: { color: tick, stepSize: 25 } } } } });
   window.refreshChartTheme = function () {
     var dk = document.documentElement.dataset.theme === 'dark';
-    var tk = dk ? '#C9C5DE' : '#4B5563';
+    var tk = dk ? 'var(--ink-2)' : 'var(--ink-3)';
     chart.options.scales.x.ticks.color = tk;
     chart.options.scales.y.ticks.color = tk;
     chart.update();

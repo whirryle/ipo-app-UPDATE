@@ -22,7 +22,7 @@
       </select>
     </div>
 
-    <div style="padding:14px;border-radius:10px;background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);border-left:4px solid var(--brand-700,#5B21B6);font-size:13px;color:var(--ink-2)">
+    <div style="padding:14px;border-radius:10px;background:linear-gradient(135deg,var(--paper) 0%,var(--paper-2) 100%);border-left:4px solid var(--brand-700);font-size:13px;color:var(--ink-2)">
       <strong>ℹ️ Informasi:</strong> Bobot ini digunakan sebagai pembagi dimensi. Default = jumlah pertanyaan kuesioner.
     </div>
 

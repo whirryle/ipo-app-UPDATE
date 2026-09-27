@@ -13,7 +13,7 @@
     @csrf
     @method('PUT')
     
-    <div style="padding:14px;border-radius:10px;background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);border-left:4px solid var(--warning,#d97706);font-size:13px;color:var(--ink-2)">
+    <div style="padding:14px;border-radius:10px;background:linear-gradient(135deg,var(--warning-50) 0%,var(--warning-100) 100%);border-left:4px solid var(--warning);font-size:13px;color:var(--ink-2)">
       <strong>⚠️ Perhatian:</strong> Perubahan bobot akan mempengaruhi perhitungan IPO untuk tahun {{ $bobot->year }} ke depannya.
     </div>
 

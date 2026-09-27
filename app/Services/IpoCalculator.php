@@ -104,14 +104,48 @@ class IpoCalculator
 
     public static function provinceLiterasi(int $pid, int $year): float
     {
+        // Try new angket_responden data first, fallback to old literasi_fisik table
+        $literasi = self::provinceLiterasiFromAngket($pid, $year);
+        if ($literasi > 0) return $literasi;
+        
         $r = DB::selectOne(
             'SELECT AVG(l.indeks) v FROM literasi_fisik l ' . self::respJoin('l', 'l.year')
             . 'WHERE c.province_id = ? AND l.year = ?', [$pid, $year]);
         return (float) ($r->v ?? 0);
     }
+    
+    /**
+     * Calculate Literasi Fisik from angket_responden (new model)
+     */
+    private static function provinceLiterasiFromAngket(int $pid, int $year): float
+    {
+        $districts = DB::select(
+            'SELECT d.id FROM districts d JOIN cities c ON c.id = d.city_id WHERE c.province_id = ?',
+            [$pid]
+        );
+        
+        if (empty($districts)) return 0;
+        
+        $total = 0;
+        $count = 0;
+        
+        foreach ($districts as $d) {
+            $score = \App\Services\AngketRespondenScoreCalculator::literasiFisik($d->id, $year);
+            if ($score > 0) {
+                $total += $score;
+                $count++;
+            }
+        }
+        
+        return $count > 0 ? $total / $count : 0;
+    }
 
     public static function provincePartisipasi(int $pid, int $year): float
     {
+        // Try new angket_responden data first, fallback to old partisipasi table
+        $partisipasi = self::provincePartisipasiFromAngket($pid, $year);
+        if ($partisipasi > 0) return $partisipasi;
+        
         $r = DB::selectOne(
             'SELECT COUNT(CASE WHEN p.frekuensi >= 3 THEN 1 END) aktif, COUNT(*) total '
             . 'FROM partisipasi p ' . self::respJoin('p', 'p.year')
@@ -119,37 +153,168 @@ class IpoCalculator
         if (!$r || !$r->total) return 0;
         return $r->aktif / $r->total;
     }
+    
+    private static function provincePartisipasiFromAngket(int $pid, int $year): float
+    {
+        $districts = DB::select(
+            'SELECT d.id FROM districts d JOIN cities c ON c.id = d.city_id WHERE c.province_id = ?',
+            [$pid]
+        );
+        
+        if (empty($districts)) return 0;
+        
+        $total = 0;
+        $count = 0;
+        
+        foreach ($districts as $d) {
+            $score = \App\Services\AngketRespondenScoreCalculator::partisipasi($d->id, $year);
+            if ($score > 0) {
+                $total += $score;
+                $count++;
+            }
+        }
+        
+        return $count > 0 ? $total / $count : 0;
+    }
 
     public static function provinceKebugaran(int $pid, int $year): float
     {
+        // Try new angket_responden data first
+        $kebugaran = self::provinceKebugaranFromAngket($pid, $year);
+        if ($kebugaran > 0) return $kebugaran;
+        
         $r = DB::selectOne(
             'SELECT AVG(k.indeks) v FROM kebugaran k ' . self::respJoin('k', 'k.year')
             . 'WHERE c.province_id = ? AND k.year = ?', [$pid, $year]);
         return (float) ($r->v ?? 0);
     }
+    
+    private static function provinceKebugaranFromAngket(int $pid, int $year): float
+    {
+        $districts = DB::select(
+            'SELECT d.id FROM districts d JOIN cities c ON c.id = d.city_id WHERE c.province_id = ?',
+            [$pid]
+        );
+        
+        if (empty($districts)) return 0;
+        
+        $total = 0;
+        $count = 0;
+        
+        foreach ($districts as $d) {
+            $score = \App\Services\AngketRespondenScoreCalculator::kebugaran($d->id, $year);
+            if ($score > 0) {
+                $total += $score;
+                $count++;
+            }
+        }
+        
+        return $count > 0 ? $total / $count : 0;
+    }
 
     public static function provinceKesehatan(int $pid, int $year): float
     {
+        // Try new angket_responden data first
+        $kesehatan = self::provinceKesehatanFromAngket($pid, $year);
+        if ($kesehatan > 0) return $kesehatan;
+        
         $r = DB::selectOne(
             'SELECT AVG(k.indeks) v FROM kesehatan k ' . self::respJoin('k', 'k.year')
             . 'WHERE c.province_id = ? AND k.year = ?', [$pid, $year]);
         return (float) ($r->v ?? 0);
     }
+    
+    private static function provinceKesehatanFromAngket(int $pid, int $year): float
+    {
+        $districts = DB::select(
+            'SELECT d.id FROM districts d JOIN cities c ON c.id = d.city_id WHERE c.province_id = ?',
+            [$pid]
+        );
+        
+        if (empty($districts)) return 0;
+        
+        $total = 0;
+        $count = 0;
+        
+        foreach ($districts as $d) {
+            $score = \App\Services\AngketRespondenScoreCalculator::kesehatan($d->id, $year);
+            if ($score > 0) {
+                $total += $score;
+                $count++;
+            }
+        }
+        
+        return $count > 0 ? $total / $count : 0;
+    }
 
     public static function provincePerkembangan(int $pid, int $year): float
     {
+        // Try new angket_responden data first
+        $personal = self::provincePerkembanganFromAngket($pid, $year);
+        if ($personal > 0) return $personal;
+        
         $r = DB::selectOne(
             'SELECT AVG(pp.indeks) v FROM perkembangan_personal pp ' . self::respJoin('pp', 'pp.year')
             . 'WHERE c.province_id = ? AND pp.year = ?', [$pid, $year]);
         return (float) ($r->v ?? 0);
     }
+    
+    private static function provincePerkembanganFromAngket(int $pid, int $year): float
+    {
+        $districts = DB::select(
+            'SELECT d.id FROM districts d JOIN cities c ON c.id = d.city_id WHERE c.province_id = ?',
+            [$pid]
+        );
+        
+        if (empty($districts)) return 0;
+        
+        $total = 0;
+        $count = 0;
+        
+        foreach ($districts as $d) {
+            $score = \App\Services\AngketRespondenScoreCalculator::perkembanganPersonal($d->id, $year);
+            if ($score > 0) {
+                $total += $score;
+                $count++;
+            }
+        }
+        
+        return $count > 0 ? $total / $count : 0;
+    }
 
     public static function provinceEkonomi(int $pid, int $year): float
     {
+        // Try new angket_responden data first
+        $ekonomi = self::provinceEkonomiFromAngket($pid, $year);
+        if ($ekonomi > 0) return $ekonomi;
+        
         $r = DB::selectOne(
             'SELECT AVG(e.total_belanja) v FROM ekonomi e ' . self::respJoin('e', 'e.year')
             . 'WHERE c.province_id = ? AND e.year = ?', [$pid, $year]);
         return min(((float) ($r->v ?? 0)) / 5000000, 1);
+    }
+    
+    private static function provinceEkonomiFromAngket(int $pid, int $year): float
+    {
+        $districts = DB::select(
+            'SELECT d.id FROM districts d JOIN cities c ON c.id = d.city_id WHERE c.province_id = ?',
+            [$pid]
+        );
+        
+        if (empty($districts)) return 0;
+        
+        $total = 0;
+        $count = 0;
+        
+        foreach ($districts as $d) {
+            $score = \App\Services\AngketRespondenScoreCalculator::ekonomi($d->id, $year);
+            if ($score > 0) {
+                $total += $score;
+                $count++;
+            }
+        }
+        
+        return $count > 0 ? $total / $count : 0;
     }
 
     public static function provincePerforma(int $pid, int $year): float
@@ -181,17 +346,21 @@ class IpoCalculator
         // Baca bobot dinamis dari database
         $bobot = self::getBobot($year);
         
-        // Hitung skor dengan bobot (6 dimensi angket responden dibagi bobot, lalu + 3 dimensi lain, dibagi 9)
-        $weightedSum = ($dims['d3_literasi_fisik'] / max($bobot['literasi_fisik'], 0.01))
-                     + ($dims['d4_partisipasi'] / max($bobot['partisipasi'], 0.01))
-                     + ($dims['d5_kebugaran'] / max($bobot['kebugaran'], 0.01))
-                     + ($dims['d6_kesehatan'] / max($bobot['kesehatan'], 0.01))
-                     + ($dims['d7_perkembangan_personal'] / max($bobot['perkembangan_personal'], 0.01))
-                     + ($dims['d8_ekonomi'] / max($bobot['ekonomi'], 0.01))
-                     + $dims['d1_sdm']
-                     + $dims['d2_ruang_terbuka']
-                     + $dims['d9_performa'];
-        $score = $weightedSum / 9;
+        // Hitung skor dengan bobot (weighted average)
+        // 6 dimensi angket responden dikali bobot, 3 dimensi lain dapat bobot default
+        $totalBobotAngket = array_sum($bobot); // 36 untuk tahun 2026
+        $bobotLain = (100 - $totalBobotAngket) / 3; // Distribusi sisa ke 3 dimensi lain
+        
+        $weightedSum = ($dims['d3_literasi_fisik'] * $bobot['literasi_fisik'])
+                     + ($dims['d4_partisipasi'] * $bobot['partisipasi'])
+                     + ($dims['d5_kebugaran'] * $bobot['kebugaran'])
+                     + ($dims['d6_kesehatan'] * $bobot['kesehatan'])
+                     + ($dims['d7_perkembangan_personal'] * $bobot['perkembangan_personal'])
+                     + ($dims['d8_ekonomi'] * $bobot['ekonomi'])
+                     + ($dims['d1_sdm'] * $bobotLain)
+                     + ($dims['d2_ruang_terbuka'] * $bobotLain)
+                     + ($dims['d9_performa'] * $bobotLain);
+        $score = $weightedSum / 100; // Normalize ke 0-1
         
         $result = array_merge(
             ['province_id' => $pid, 'year' => $year],
@@ -243,6 +412,10 @@ class IpoCalculator
 
     public static function cityLiterasi(int $cityId, int $year): float
     {
+        // Try new angket_responden data first
+        $literasi = \App\Services\AngketRespondenScoreCalculator::literasiFisikCity($cityId, $year);
+        if ($literasi > 0) return $literasi;
+        
         $r = DB::selectOne(
             'SELECT AVG(l.indeks) v FROM literasi_fisik l '
             . 'JOIN respondents r ON l.respondent_id = r.id '
@@ -254,6 +427,10 @@ class IpoCalculator
 
     public static function cityPartisipasi(int $cityId, int $year): float
     {
+        // Try new angket_responden data first
+        $partisipasi = \App\Services\AngketRespondenScoreCalculator::partisipasiCity($cityId, $year);
+        if ($partisipasi > 0) return $partisipasi;
+        
         $r = DB::selectOne(
             'SELECT COUNT(CASE WHEN p.frekuensi >= 3 THEN 1 END) aktif, COUNT(*) total '
             . 'FROM partisipasi p '
@@ -267,6 +444,10 @@ class IpoCalculator
 
     public static function cityKebugaran(int $cityId, int $year): float
     {
+        // Try new angket_responden data first
+        $kebugaran = \App\Services\AngketRespondenScoreCalculator::kebugaranCity($cityId, $year);
+        if ($kebugaran > 0) return $kebugaran;
+        
         $r = DB::selectOne(
             'SELECT AVG(k.indeks) v FROM kebugaran k '
             . 'JOIN respondents r ON k.respondent_id = r.id '
@@ -278,6 +459,10 @@ class IpoCalculator
 
     public static function cityKesehatan(int $cityId, int $year): float
     {
+        // Try new angket_responden data first
+        $kesehatan = \App\Services\AngketRespondenScoreCalculator::kesehatanCity($cityId, $year);
+        if ($kesehatan > 0) return $kesehatan;
+        
         $r = DB::selectOne(
             'SELECT AVG(k.indeks) v FROM kesehatan k '
             . 'JOIN respondents r ON k.respondent_id = r.id '
@@ -289,6 +474,10 @@ class IpoCalculator
 
     public static function cityPerkembangan(int $cityId, int $year): float
     {
+        // Try new angket_responden data first
+        $personal = \App\Services\AngketRespondenScoreCalculator::perkembanganPersonalCity($cityId, $year);
+        if ($personal > 0) return $personal;
+        
         $r = DB::selectOne(
             'SELECT AVG(pp.indeks) v FROM perkembangan_personal pp '
             . 'JOIN respondents r ON pp.respondent_id = r.id '
@@ -300,6 +489,10 @@ class IpoCalculator
 
     public static function cityEkonomi(int $cityId, int $year): float
     {
+        // Try new angket_responden data first
+        $ekonomi = \App\Services\AngketRespondenScoreCalculator::ekonomiCity($cityId, $year);
+        if ($ekonomi > 0) return $ekonomi;
+        
         $r = DB::selectOne(
             'SELECT AVG(e.total_belanja) v FROM ekonomi e '
             . 'JOIN respondents r ON e.respondent_id = r.id '
@@ -336,17 +529,21 @@ class IpoCalculator
         // Baca bobot dinamis dari database
         $bobot = self::getBobot($year);
         
-        // Hitung skor dengan bobot (6 dimensi angket responden dibagi bobot, lalu + 3 dimensi lain, dibagi 9)
-        $weightedSum = ($dims['d3_literasi_fisik'] / max($bobot['literasi_fisik'], 0.01))
-                     + ($dims['d4_partisipasi'] / max($bobot['partisipasi'], 0.01))
-                     + ($dims['d5_kebugaran'] / max($bobot['kebugaran'], 0.01))
-                     + ($dims['d6_kesehatan'] / max($bobot['kesehatan'], 0.01))
-                     + ($dims['d7_perkembangan_personal'] / max($bobot['perkembangan_personal'], 0.01))
-                     + ($dims['d8_ekonomi'] / max($bobot['ekonomi'], 0.01))
-                     + $dims['d1_sdm']
-                     + $dims['d2_ruang_terbuka']
-                     + $dims['d9_performa'];
-        $score = $weightedSum / 9;
+        // Hitung skor dengan bobot (weighted average)
+        // 6 dimensi angket responden dikali bobot, 3 dimensi lain dapat bobot default
+        $totalBobotAngket = array_sum($bobot); // 36 untuk tahun 2026
+        $bobotLain = (100 - $totalBobotAngket) / 3; // Distribusi sisa ke 3 dimensi lain
+        
+        $weightedSum = ($dims['d3_literasi_fisik'] * $bobot['literasi_fisik'])
+                     + ($dims['d4_partisipasi'] * $bobot['partisipasi'])
+                     + ($dims['d5_kebugaran'] * $bobot['kebugaran'])
+                     + ($dims['d6_kesehatan'] * $bobot['kesehatan'])
+                     + ($dims['d7_perkembangan_personal'] * $bobot['perkembangan_personal'])
+                     + ($dims['d8_ekonomi'] * $bobot['ekonomi'])
+                     + ($dims['d1_sdm'] * $bobotLain)
+                     + ($dims['d2_ruang_terbuka'] * $bobotLain)
+                     + ($dims['d9_performa'] * $bobotLain);
+        $score = $weightedSum / 100; // Normalize ke 0-1
         
         $result = array_merge(
             ['city_id' => $cityId, 'year' => $year],
@@ -400,6 +597,10 @@ class IpoCalculator
 
     public static function districtLiterasi(int $districtId, int $year): float
     {
+        // Try new angket_responden data first
+        $literasi = \App\Services\AngketRespondenScoreCalculator::literasiFisik($districtId, $year);
+        if ($literasi > 0) return $literasi;
+        
         $r = DB::selectOne(
             'SELECT AVG(l.indeks) v FROM literasi_fisik l '
             . 'JOIN respondents r ON l.respondent_id = r.id '
@@ -410,6 +611,10 @@ class IpoCalculator
 
     public static function districtPartisipasi(int $districtId, int $year): float
     {
+        // Try new angket_responden data first
+        $partisipasi = \App\Services\AngketRespondenScoreCalculator::partisipasi($districtId, $year);
+        if ($partisipasi > 0) return $partisipasi;
+        
         $r = DB::selectOne(
             'SELECT COUNT(CASE WHEN p.frekuensi >= 3 THEN 1 END) aktif, COUNT(*) total '
             . 'FROM partisipasi p '
@@ -422,6 +627,10 @@ class IpoCalculator
 
     public static function districtKebugaran(int $districtId, int $year): float
     {
+        // Try new angket_responden data first
+        $kebugaran = \App\Services\AngketRespondenScoreCalculator::kebugaran($districtId, $year);
+        if ($kebugaran > 0) return $kebugaran;
+        
         $r = DB::selectOne(
             'SELECT AVG(k.indeks) v FROM kebugaran k '
             . 'JOIN respondents r ON k.respondent_id = r.id '
@@ -432,6 +641,10 @@ class IpoCalculator
 
     public static function districtKesehatan(int $districtId, int $year): float
     {
+        // Try new angket_responden data first
+        $kesehatan = \App\Services\AngketRespondenScoreCalculator::kesehatan($districtId, $year);
+        if ($kesehatan > 0) return $kesehatan;
+        
         $r = DB::selectOne(
             'SELECT AVG(k.indeks) v FROM kesehatan k '
             . 'JOIN respondents r ON k.respondent_id = r.id '
@@ -442,6 +655,10 @@ class IpoCalculator
 
     public static function districtPerkembangan(int $districtId, int $year): float
     {
+        // Try new angket_responden data first
+        $personal = \App\Services\AngketRespondenScoreCalculator::perkembanganPersonal($districtId, $year);
+        if ($personal > 0) return $personal;
+        
         $r = DB::selectOne(
             'SELECT AVG(pp.indeks) v FROM perkembangan_personal pp '
             . 'JOIN respondents r ON pp.respondent_id = r.id '
@@ -452,6 +669,10 @@ class IpoCalculator
 
     public static function districtEkonomi(int $districtId, int $year): float
     {
+        // Try new angket_responden data first
+        $ekonomi = \App\Services\AngketRespondenScoreCalculator::ekonomi($districtId, $year);
+        if ($ekonomi > 0) return $ekonomi;
+        
         $r = DB::selectOne(
             'SELECT AVG(e.total_belanja) v FROM ekonomi e '
             . 'JOIN respondents r ON e.respondent_id = r.id '
@@ -484,17 +705,21 @@ class IpoCalculator
         // Baca bobot dinamis dari database
         $bobot = self::getBobot($year);
         
-        // Hitung skor dengan bobot (6 dimensi angket responden dibagi bobot, lalu + 3 dimensi lain, dibagi 9)
-        $weightedSum = ($dims['d3_literasi_fisik'] / max($bobot['literasi_fisik'], 0.01))
-                     + ($dims['d4_partisipasi'] / max($bobot['partisipasi'], 0.01))
-                     + ($dims['d5_kebugaran'] / max($bobot['kebugaran'], 0.01))
-                     + ($dims['d6_kesehatan'] / max($bobot['kesehatan'], 0.01))
-                     + ($dims['d7_perkembangan_personal'] / max($bobot['perkembangan_personal'], 0.01))
-                     + ($dims['d8_ekonomi'] / max($bobot['ekonomi'], 0.01))
-                     + $dims['d1_sdm']
-                     + $dims['d2_ruang_terbuka']
-                     + $dims['d9_performa'];
-        $score = $weightedSum / 9;
+        // Hitung skor dengan bobot (weighted average)
+        // 6 dimensi angket responden dikali bobot, 3 dimensi lain dapat bobot default
+        $totalBobotAngket = array_sum($bobot); // 36 untuk tahun 2026
+        $bobotLain = (100 - $totalBobotAngket) / 3; // Distribusi sisa ke 3 dimensi lain
+        
+        $weightedSum = ($dims['d3_literasi_fisik'] * $bobot['literasi_fisik'])
+                     + ($dims['d4_partisipasi'] * $bobot['partisipasi'])
+                     + ($dims['d5_kebugaran'] * $bobot['kebugaran'])
+                     + ($dims['d6_kesehatan'] * $bobot['kesehatan'])
+                     + ($dims['d7_perkembangan_personal'] * $bobot['perkembangan_personal'])
+                     + ($dims['d8_ekonomi'] * $bobot['ekonomi'])
+                     + ($dims['d1_sdm'] * $bobotLain)
+                     + ($dims['d2_ruang_terbuka'] * $bobotLain)
+                     + ($dims['d9_performa'] * $bobotLain);
+        $score = $weightedSum / 100; // Normalize ke 0-1
         
         $result = array_merge(
             ['district_id' => $districtId, 'year' => $year],

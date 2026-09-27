@@ -16,6 +16,7 @@
   --brand-400: #A78BFA;
   --brand-100: #EDE9FE;
   --brand-50:  #F5F3FF;
+  --brand-soft: rgba(124, 58, 237, 0.14);
 
   /* Semantic — from guide */
   --green:     #16A34A;
@@ -65,14 +66,21 @@
   --info-light: var(--blue-100);
   --info-soft: var(--blue-100);
 
-  /* Accent / Primary (green primary for CTAs per guide, purple accent for active nav) */
-  --accent: #16A34A;
-  --accent-soft: rgba(22, 163, 74, 0.14);
-  --accent-bg: #16A34A;
-  --accent-border: #22C55E;
-  --accent-light: #DCFCE7;
-  --primary: #5B21B6;
+  /* Accent / Primary (UNGU #7C3AED per DESIGN.md - redesign 2026-09-27) */
+  --accent: #7C3AED;
+  --accent-soft: rgba(124, 58, 237, 0.14);
+  --accent-chart: #7C3AED;
+  --accent-hover: #A78BFA;
+  --accent-bg: #7C3AED;
+  --accent-border: #A78BFA;
+  --accent-light: #EDE9FE;
+  --primary: #7C3AED;
   --primary-soft: #EDE9FE;
+  
+  /* Card System (explicit per DESIGN.md) */
+  --card-bg: #FFFFFF;
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --card-radius: 16px;
 
   /* Misc (referenced in components) */
   --text-h: #1E1B2E;
@@ -144,10 +152,10 @@ body {
 
 /* ===== Cards ===== */
 .card {
-  background: var(--white);
+  background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
   transition: box-shadow .2s ease, transform .2s ease, border-color .2s ease;
 }
 .card-hover:hover { box-shadow: var(--shadow-md); border-color: #D6D0E6; transform: translateY(-1px); }
@@ -167,8 +175,8 @@ body {
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: .55; cursor: not-allowed; }
 
-.btn-primary { background: var(--brand-700); color: #fff; box-shadow: 0 2px 8px rgba(91,33,182,.28); }
-.btn-primary:hover:not(:disabled) { background: var(--brand-800); }
+.btn-primary { background: var(--brand-500); color: #fff; box-shadow: 0 2px 8px rgba(124,58,237,.28); }
+.btn-primary:hover:not(:disabled) { background: var(--brand-600); }
 .btn-green { background: var(--green); color: #fff; box-shadow: 0 2px 8px rgba(22,163,74,.25); }
 .btn-green:hover:not(:disabled) { background: var(--green-600); }
 

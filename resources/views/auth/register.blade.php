@@ -88,15 +88,13 @@ function tukarTema(){var h=document.documentElement;var d=h.dataset.theme==='dar
             <p id="password-strength" style="font-size:10px;color:var(--ink-3);margin-top:4px"></p>
           </div>
         </div>
+        <input type="hidden" name="role" value="operator">
         <div class="input-group">
-          <label for="register-role">{{ __('Role') }}</label>
-          <select id="register-role" name="role" class="input" style="padding-left:14px">
-            <option value="" disabled selected>{{ __('Pilih role') }}</option>
-            <option value="superadmin">{{ __('Superadmin') }}</option>
-            <option value="admin">{{ __('Admin Kab/Kota') }}</option>
-            <option value="operator">{{ __('Operator Kecamatan') }}</option>
-            <option value="user">{{ __('User (Umum)') }}</option>
-          </select>
+          <label>{{ __('Role') }}</label>
+          <div style="padding:12px 14px;background:var(--brand-50);border:1px solid var(--brand-100);border-radius:12px;color:var(--brand-700);font-size:13px;font-weight:500">
+            ✓ Operator Kecamatan
+          </div>
+          <p style="font-size:10px;color:var(--ink-3);margin-top:4px">Pendaftaran publik hanya untuk Operator Kecamatan</p>
         </div>
         <div id="register-province-field" class="input-group hidden-field">
           <label for="register-province">{{ __('Provinsi') }}</label>
@@ -131,41 +129,18 @@ function tukarTema(){var h=document.documentElement;var d=h.dataset.theme==='dar
 </div>
 <script>
 (function(){
-  const role = document.getElementById('register-role');
   const cityField = document.getElementById('register-city-field');
   const districtField = document.getElementById('register-district-field');
   const citySelect = document.getElementById('register-city');
   const districtSelect = document.getElementById('register-district');
   const passwordInput = document.getElementById('register-password');
   const passwordStrength = document.getElementById('password-strength');
+  const provinceField = document.getElementById('register-province-field');
 
-  function toggleFields() {
-    const r = role.value;
-    const provinceField = document.getElementById('register-province-field');
-    
-    if (r === 'superadmin') {
-      provinceField.classList.remove('hidden-field');
-      cityField.classList.add('hidden-field');
-      districtField.classList.add('hidden-field');
-      citySelect.value = '';
-      districtSelect.value = '';
-    } else if (r === 'admin') {
-      provinceField.classList.remove('hidden-field');
-      cityField.classList.remove('hidden-field');
-      districtField.classList.add('hidden-field');
-      districtSelect.value = '';
-    } else if (r === 'operator') {
-      provinceField.classList.remove('hidden-field');
-      cityField.classList.remove('hidden-field');
-      districtField.classList.remove('hidden-field');
-    } else {
-      provinceField.classList.add('hidden-field');
-      cityField.classList.add('hidden-field');
-      districtField.classList.add('hidden-field');
-      citySelect.value = '';
-      districtSelect.value = '';
-    }
-  }
+  // Role fixed to operator, always show all fields
+  provinceField.classList.remove('hidden-field');
+  cityField.classList.remove('hidden-field');
+  districtField.classList.remove('hidden-field');
 
   citySelect.addEventListener('change', function() {
     const cityId = this.value;
@@ -195,9 +170,6 @@ function tukarTema(){var h=document.documentElement;var d=h.dataset.theme==='dar
         }
       });
   });
-
-  role.addEventListener('change', toggleFields);
-  toggleFields();
 
   passwordInput.addEventListener('input', function(){
     const v=this.value; let s='Lemah';

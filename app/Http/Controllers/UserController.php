@@ -74,38 +74,51 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->validate(
-            [
-                'username' => 'required|min:3|max:50|unique:users,username',
-                'password' => 'required|min:6',
-                'full_name' => 'required|max:100',
-                'role' => 'nullable|in:superadmin,admin_city,operator',
-                'province_id' => 'nullable|integer|exists:provinces,id',
-                'city_id' => 'nullable|integer|exists:cities,id',
-                'district_id' => 'nullable|integer|exists:districts,id',
-            ],
-            ['username.required' => 'Username wajib diisi', 'username.unique' => 'Username sudah digunakan', 'password.required' => 'Password wajib diisi', 'full_name.required' => 'Nama lengkap wajib diisi']
-        );
-        if ($tolak = \App\Support\PasswordKuat::cek($data['password'])) {
-            if ($request->expectsJson()) return response()->json(['error' => $tolak], 422);
-            return back()->withErrors(['password' => $tolak])->withInput();
+        try {
+            $data = $request->validate(
+                [
+                    'username' => 'required|min:3|max:50|unique:users,username',
+                    'password' => 'required|min:6',
+                    'full_name' => 'required|max:100',
+                    'role' => 'nullable|in:superadmin,admin_city,operator',
+                    'province_id' => 'nullable|integer|exists:provinces,id',
+                    'city_id' => 'nullable|integer|exists:cities,id',
+                    'district_id' => 'nullable|integer|exists:districts,id',
+                ],
+                ['username.required' => 'Username wajib diisi', 'username.unique' => 'Username sudah digunakan', 'password.required' => 'Password wajib diisi', 'full_name.required' => 'Nama lengkap wajib diisi']
+            );
+            if ($tolak = \App\Support\PasswordKuat::cek($data['password'])) {
+                if ($request->expectsJson()) return response()->json(['error' => $tolak], 422);
+                return back()->withErrors(['password' => $tolak])->withInput();
+            }
+            // Auto-set province_id ke Kaltim (id=1)
+            $provinceId = $data['province_id'] ?? 1;
+            $cityId = $data['city_id'] ?? null;
+            $districtId = $data['district_id'] ?? null;
+            // Clear city/district based on role
+            $role = $data['role'] ?? 'operator';
+            if ($role === 'superadmin') { $cityId = null; $districtId = null; }
+            elseif ($role === 'admin_city') { $districtId = null; }
+            $user = User::create([
+                'username' => $data['username'], 'password_hash' => Hash::make($data['password']),
+                'full_name' => $data['full_name'], 'role' => $role,
+                'province_id' => $provinceId, 'city_id' => $cityId, 'district_id' => $districtId,
+            ]);
+            if ($request->expectsJson()) return response()->json(['id' => $user->id, 'message' => __('User berhasil dibuat')]);
+            Audit::catat($request->user(), 'tambah', 'users', $user->id, ['username' => $user->username, 'role' => $user->role]);
+            return redirect('/users')->with('toast', ['type' => 'success', 'text' => __('User berhasil dibuat.')]);
+        } catch (\Exception $e) {
+            \Log::error('Error pada create user', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'admin_id' => $request->user()->id ?? null,
+            ]);
+            if ($request->expectsJson()) {
+                return response()->json(['error' => 'Terjadi kesalahan saat membuat user. Silakan coba lagi nanti.'], 500);
+            }
+            return back()->with('toast', ['type' => 'error', 'text' => 'Terjadi kesalahan saat membuat user. Silakan coba lagi nanti.'])->withInput();
         }
-        // Auto-set province_id ke Kaltim (id=1)
-        $provinceId = $data['province_id'] ?? 1;
-        $cityId = $data['city_id'] ?? null;
-        $districtId = $data['district_id'] ?? null;
-        // Clear city/district based on role
-        $role = $data['role'] ?? 'operator';
-        if ($role === 'superadmin') { $cityId = null; $districtId = null; }
-        elseif ($role === 'admin_city') { $districtId = null; }
-        $user = User::create([
-            'username' => $data['username'], 'password_hash' => Hash::make($data['password']),
-            'full_name' => $data['full_name'], 'role' => $role,
-            'province_id' => $provinceId, 'city_id' => $cityId, 'district_id' => $districtId,
-        ]);
-        if ($request->expectsJson()) return response()->json(['id' => $user->id, 'message' => __('User berhasil dibuat')]);
-        Audit::catat($request->user(), 'tambah', 'users', $user->id, ['username' => $user->username, 'role' => $user->role]);
-        return redirect('/users')->with('toast', ['type' => 'success', 'text' => __('User berhasil dibuat.')]);
     }
 
     public function edit(int $id)
@@ -185,12 +198,23 @@ class UserController extends Controller
 
     public function tokenReset(Request $request, int $id)
     {
-        $token = bin2hex(random_bytes(8));
-        DB::table('reset_tokens')->insert([
-            'user_id' => $id, 'token' => $token,
-            'expires_at' => date('Y-m-d H:i:s', time() + 3600),
-        ]);
-        Audit::catat($request->user(), 'reset', 'users', $id, []);
-        return redirect('/users')->with('toast', ['type' => 'success', 'text' => __('Token reset (1 jam):') . " {$token}"]);
+        try {
+            $token = bin2hex(random_bytes(8));
+            DB::table('reset_tokens')->insert([
+                'user_id' => $id, 'token' => $token,
+                'expires_at' => date('Y-m-d H:i:s', time() + 3600),
+            ]);
+            Audit::catat($request->user(), 'reset', 'users', $id, ['token_generated' => true]);
+            return redirect('/users')->with('toast', ['type' => 'success', 'text' => __('Token reset telah dikirim ke pengguna (berlaku 1 jam)')]);
+        } catch (\Exception $e) {
+            \Log::error('Error pada token reset', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'admin_id' => $request->user()->id ?? null,
+                'target_user_id' => $id,
+            ]);
+            return back()->with('toast', ['type' => 'error', 'text' => 'Terjadi kesalahan saat generate token. Silakan coba lagi nanti.']);
+        }
     }
 }

@@ -17,7 +17,7 @@ $menus = [
 ];
 @endphp
 <div class="anim-fade" style="display:flex;flex-direction:column;gap:16px">
-  <div class="card" style="padding:20px;background:linear-gradient(120deg,#5B21B6,#4C1D95)">
+  <div class="card" style="padding:20px;background:linear-gradient(120deg,var(--brand-700),var(--brand-800))">
     <h1 style="color:#fff;font-size:18px;font-weight:800">Pilih Menu Data</h1>
     <p style="color:rgba(255,255,255,.75);font-size:12.5px;margin-top:4px">Kelola data indikator pembangunan olahraga yang ingin diinput</p>
   </div>

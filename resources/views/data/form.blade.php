@@ -107,10 +107,10 @@
 
     {{-- DISPLAY OTOMATIS: pilih desa → auto-fill kecamatan, kota, provinsi --}}
     @if(in_array('village_id', $fields))
-    <div id="location-display" style="display:none;padding:14px;border-radius:10px;background:linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);border-left:4px solid var(--brand-700,#5B21B6);font-size:13px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5B21B6" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-        <strong style="color:var(--brand-700,#5B21B6)">Lokasi Otomatis Terdeteksi:</strong>
+    <div id="location-display" style="display:none;padding:14px;border-radius:10px;background:linear-gradient(135deg, var(--paper) 0%, var(--paper-2) 100%);border-left:4px solid var(--brand-700);font-size:13px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-700)" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <strong style="color:var(--brand-700)">Lokasi Otomatis Terdeteksi:</strong>
       </div>
       <div style="display:grid;grid-template-columns:1fr;gap:6px;padding-left:26px">
         <div><span style="color:var(--ink-3);font-size:11px">Kecamatan</span><br><strong id="auto-district-text">—</strong></div>

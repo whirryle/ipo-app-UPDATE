@@ -65,9 +65,9 @@
     type: 'line',
     data: { labels: trend.map(function (t) { return t.year; }), datasets: [{
       label: 'IPO Score', data: trend.map(function (t) { return t.score; }),
-      borderColor: '#6D28D9', backgroundColor: 'rgba(109,40,217,.10)',
+      borderColor: 'var(--brand-600)', backgroundColor: 'rgba(109,40,217,.10)',
       borderWidth: 2.5, pointRadius: 5, pointBackgroundColor: c.pt,
-      pointBorderColor: '#6D28D9', pointBorderWidth: 2.5, pointHoverRadius: 7, fill: true, tension: 0.35 }]},
+      pointBorderColor: 'var(--brand-600)', pointBorderWidth: 2.5, pointHoverRadius: 7, fill: true, tension: 0.35 }]},
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: { backgroundColor: '#312E81', callbacks: { label: function (x) { return 'Score: ' + x.parsed.y + '/100'; } } } },
       scales: { x: { grid: { display: false }, ticks: { color: c.tick, font: { size: 11 } } },

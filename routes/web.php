@@ -1,11 +1,13 @@
 <?php
 
 use App\Http\Controllers\AktivitasController;
+use App\Http\Controllers\AngketRespondenController;
 use App\Http\Controllers\ApiController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BandingController;
 use App\Http\Controllers\BobotController;
 use App\Http\Controllers\CalculateController;
+use App\Http\Controllers\IpoInfoController;
 use App\Http\Controllers\SistemController;
 use App\Http\Controllers\SampahController;
 use App\Http\Controllers\NotifikasiController;
@@ -84,34 +86,31 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/cari', [CariController::class, 'cari']);
 
-    Route::get('/data', [DimensionController::class, 'menu']);
-    Route::get('/data/{dim}', [DimensionController::class, 'index'])->where('dim', '[a-z-]+');
-    Route::get('/data/{dim}/{id}/riwayat', [DimensionController::class, 'riwayat'])->where(['dim' => '[a-z-]+', 'id' => '[0-9]+']);
-    
-    // CRUD hanya untuk admin_city dan operator (superadmin read-only)
-    Route::middleware(['admin', 'not_superadmin'])->group(function () {
-        Route::get('/data/{dim}/tambah', [DimensionController::class, 'create'])->where('dim', '[a-z-]+');
-        Route::get('/sampah', [SampahController::class, 'index']);
-        Route::post('/sampah/{id}/pulih', [SampahController::class, 'pulih'])->where('id', '[0-9]+');
-        Route::delete('/sampah/{id}', [SampahController::class, 'hapus'])->where('id', '[0-9]+');
-        Route::post('/sampah/kosongkan', [SampahController::class, 'kosongkan']);
-        Route::get('/data/{dim}/impor', [DimensionController::class, 'impor'])->where('dim', '[a-z-]+');
-        Route::get('/data/{dim}/contoh', [DimensionController::class, 'contoh'])->where('dim', '[a-z-]+');
-        Route::post('/data/{dim}/impor', [DimensionController::class, 'prosesImpor'])->where('dim', '[a-z-]+');
-        Route::post('/data/{dim}/impor/konfirmasi', [DimensionController::class, 'konfirmasiImpor'])->where('dim', '[a-z-]+');
-        Route::post('/data/{dim}', [DimensionController::class, 'store'])->where('dim', '[a-z-]+');
-        Route::get('/data/{dim}/{id}/ubah', [DimensionController::class, 'edit'])->where(['dim' => '[a-z-]+', 'id' => '[0-9]+']);
-        Route::put('/data/{dim}/{id}', [DimensionController::class, 'update'])->where(['dim' => '[a-z-]+', 'id' => '[0-9]+']);
-        Route::delete('/data/{dim}/hapus-banyak', [DimensionController::class, 'hapusBanyak'])->where('dim', '[a-z-]+');
-        Route::delete('/data/{dim}/{id}', [DimensionController::class, 'destroy'])->where(['dim' => '[a-z-]+', 'id' => '[0-9]+']);
+    // Angket Responden
+    // Operator: full CRUD (create, edit, delete)
+    // Admin City & Superadmin: read-only (view, pdf)
+    Route::middleware('auth')->prefix('data')->group(function () {
+        Route::get('/', [AngketRespondenController::class, 'index'])->name('angket.index');
+        Route::get('/{id}/pdf', [AngketRespondenController::class, 'exportPdf'])->name('angket.pdf')->where('id', '[0-9]+');
     });
+    
+    Route::middleware('operator')->prefix('data')->group(function () {
+        Route::get('/tambah', [AngketRespondenController::class, 'create'])->name('angket.create');
+        Route::post('/', [AngketRespondenController::class, 'store'])->name('angket.store');
+        Route::get('/{id}/ubah', [AngketRespondenController::class, 'edit'])->name('angket.edit')->where('id', '[0-9]+');
+        Route::put('/{id}', [AngketRespondenController::class, 'update'])->name('angket.update')->where('id', '[0-9]+');
+        Route::delete('/{id}', [AngketRespondenController::class, 'destroy'])->name('angket.destroy')->where('id', '[0-9]+');
+    });
+    
+    Route::get('/sampah', [SampahController::class, 'index'])->middleware('admin');
+    Route::post('/sampah/{id}/pulih', [SampahController::class, 'pulih'])->middleware('admin')->where('id', '[0-9]+');
+    Route::delete('/sampah/{id}', [SampahController::class, 'hapus'])->middleware('admin')->where('id', '[0-9]+');
+    Route::post('/sampah/kosongkan', [SampahController::class, 'kosongkan'])->middleware('admin');
 
     Route::get('/hitung', [CalculateController::class, 'show']);
     
-    // Hitung ulang hanya untuk admin_city dan operator
-    Route::middleware(['admin', 'not_superadmin'])->group(function () {
-        Route::post('/hitung/ulang', [CalculateController::class, 'recalculate']);
-    });
+    // Hitung ulang untuk semua authenticated users (superadmin, admin_city, operator)
+    Route::post('/hitung/ulang', [CalculateController::class, 'recalculate']);
     Route::get('/hitung/riwayat/{provinceId}', [CalculateController::class, 'history'])->where('provinceId', '[0-9]+');
 
     Route::get('/grafik', [GraphController::class, 'show']);
@@ -155,4 +154,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/bantuan', fn() => view('help'));
     Route::get('/api/options/{kind}', [DimensionController::class, 'options']);
+    
+    // Narasi/Penjelasan IPO (all authenticated users)
+    Route::get('/tentang-ipo', [IpoInfoController::class, 'index'])->name('ipo.info');
 });

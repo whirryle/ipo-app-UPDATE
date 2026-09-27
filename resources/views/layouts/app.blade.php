@@ -63,6 +63,25 @@
   .bar-green { background: var(--green); } .bar-amber { background: var(--amber); } .bar-red { background: var(--red); }
   .toast-card { padding: 12px 16px; margin-bottom: 12px; border-left: 4px solid var(--green); }
   .toast-card.err { border-left-color: var(--red); }
+  .wizard-container { max-width: 800px; margin: 0 auto; }
+  .wizard-progress { display: flex; gap: 8px; margin-bottom: 24px; }
+  .progress-step { flex: 1; height: 6px; background: var(--ring-track); border-radius: 3px; overflow: hidden; }
+  .progress-step.active { background: var(--brand-600); }
+  .progress-step.completed { background: var(--green); }
+  .step-content { display: none; }
+  .step-content.active { display: block; }
+  .scale-options { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+  .scale-option { display: flex; gap: 8px; align-items: center; }
+  .scale-option input[type="radio"], .scale-option input[type="checkbox"] { cursor: pointer; }
+  .scale-option label { cursor: pointer; margin: 0; }
+  .wizard-buttons { display: flex; gap: 12px; justify-content: space-between; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border); }
+  .btn-prev, .btn-next, .btn-submit { padding: 10px 24px; border-radius: 8px; border: 0; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .btn-prev { background: var(--neutral-200); color: var(--ink); }
+  .btn-prev:hover { background: var(--neutral-300); }
+  .btn-next { background: var(--brand-600); color: #fff; margin-left: auto; }
+  .btn-next:hover { background: var(--brand-700); }
+  .btn-submit { background: var(--green); color: #fff; margin-left: auto; }
+  .btn-submit:hover { background: var(--green-600); }
 </style>
 @stack('head')
 </head>
@@ -107,6 +126,7 @@
       <a href="/laporan" class="{{ $active('laporan') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h7M9 17h7"/></svg><span>{{ __('Laporan') }}<small>{{ __('Cetak & ekspor') }}</small></span></a>
       <a href="/notifikasi" class="{{ $active('notifikasi') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span>{{ __('Notifikasi') }}@if($notifCount)<b style="background:#fff;color:#5B21B6;border-radius:99px;font-size:10px;padding:1px 7px;margin-left:6px">{{ $notifCount }}</b>@endif<small>{{ __('Perubahan skor') }}</small></span></a>
       <a href="/bantuan" class="{{ $active('bantuan') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.8.3-.9 1-.9 1.7"/><path d="M12 17h.01"/></svg><span>{{ __('Bantuan') }}<small>{{ __('Tips & bantuan') }}</small></span></a>
+      <a href="/tentang-ipo" class="{{ $active('tentang-ipo') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg><span>{{ __('Tentang IPO') }}<small>{{ __('Narasi & penjelasan') }}</small></span></a>
       @if($isSuper)
       <a href="/users" class="{{ $active('users') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6"/><path d="M16 4a4 4 0 0 1 0 8M22 21c0-3-1.5-5-4-5.5"/></svg><span>{{ __('Manajemen User') }}<small>{{ __('Kelola akun pengguna') }}</small></span></a>
       @endif
@@ -289,6 +309,136 @@ function cetakBagian(id) {
   scrim.addEventListener('click', close);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
   side.querySelectorAll('a').forEach(function (a) { a.addEventListener('click', close); });
+})();
+(function () {
+  var currentStep = parseInt(localStorage.getItem('wizard-step') || '1');
+  var totalSteps = 8;
+  
+  function showStep(step) {
+    if (step < 1) step = 1;
+    if (step > totalSteps) step = totalSteps;
+    
+    // Hide all steps
+    document.querySelectorAll('.step-content').forEach(function(el) {
+      el.classList.remove('active');
+    });
+    
+    // Show current step
+    var currentStepEl = document.getElementById('step' + step);
+    if (currentStepEl) {
+      currentStepEl.classList.add('active');
+    }
+    
+    // Update progress
+    document.querySelectorAll('.progress-step').forEach(function(el, idx) {
+      el.classList.remove('active', 'completed');
+      if (idx + 1 < step) {
+        el.classList.add('completed');
+      } else if (idx + 1 === step) {
+        el.classList.add('active');
+      }
+    });
+    
+    // Update buttons
+    var prevBtn = document.getElementById('btnPrev');
+    var nextBtn = document.getElementById('btnNext');
+    var submitBtn = document.getElementById('btnSubmit');
+    
+    if (prevBtn) prevBtn.style.display = step === 1 ? 'none' : 'block';
+    if (nextBtn) nextBtn.style.display = step === totalSteps ? 'none' : 'block';
+    if (submitBtn) submitBtn.style.display = step === totalSteps ? 'block' : 'none';
+    
+    // Scroll to top
+    window.scrollTo(0, 0);
+    
+    currentStep = step;
+    localStorage.setItem('wizard-step', step);
+  }
+  
+  window.nextStep = function() {
+    if (validateStep(currentStep)) {
+      showStep(currentStep + 1);
+    }
+  };
+  
+  window.prevStep = function() {
+    showStep(currentStep - 1);
+  };
+  
+  function validateStep(step) {
+    var stepEl = document.getElementById('step' + step);
+    if (!stepEl) return true;
+    
+    var required = stepEl.querySelectorAll('[required]');
+    for (var i = 0; i < required.length; i++) {
+      var field = required[i];
+      if (field.type === 'radio' || field.type === 'checkbox') {
+        var group = document.querySelectorAll('[name="' + field.name + '"]');
+        var checked = false;
+        group.forEach(function(el) {
+          if (el.checked) checked = true;
+        });
+        if (!checked) {
+          alert('Silakan isi semua pertanyaan pada tahap ' + step);
+          return false;
+        }
+      } else if (!field.value.trim()) {
+        alert('Silakan isi semua pertanyaan pada tahap ' + step);
+        field.focus();
+        return false;
+      }
+    }
+    
+    // Conditional logic for step 3 (Partisipasi)
+    if (step === 3) {
+      var partisipasiYa = document.querySelector('[name="partisipasi_minggu_lalu"][value="ya"]:checked');
+      if (partisipasiYa) {
+        var conditionalFields = ['partisipasi_frekuensi', 'partisipasi_durasi', 'partisipasi_intensitas', 'partisipasi_jenis', 'partisipasi_tujuan', 'partisipasi_tempat'];
+        for (var i = 0; i < conditionalFields.length; i++) {
+          var field = document.querySelector('[name="' + conditionalFields[i] + '"]');
+          if (field && !field.value) {
+            alert('Silakan isi semua pertanyaan karena Anda menjawab "Ya"');
+            return false;
+          }
+        }
+      }
+    }
+    
+    // Conditional logic for step 6 (Ekonomi)
+    if (step === 6) {
+      var ekonomiYa = document.querySelector('[name="ekonomi_belanja"][value="ya"]:checked');
+      if (ekonomiYa) {
+        var ekonomiJumlah = document.querySelector('[name="ekonomi_jumlah"]:checked');
+        if (!ekonomiJumlah) {
+          alert('Silakan isi semua pertanyaan karena Anda menjawab "Ya"');
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  }
+  
+  // Handle conditional visibility
+  document.addEventListener('change', function(e) {
+    if (e.target.name === 'partisipasi_minggu_lalu') {
+      var conditionalDiv = document.querySelector('[data-conditional="partisipasi"]');
+      if (conditionalDiv) {
+        conditionalDiv.style.display = e.target.value === 'ya' ? 'block' : 'none';
+      }
+    }
+    if (e.target.name === 'ekonomi_belanja') {
+      var conditionalDiv = document.querySelector('[data-conditional="ekonomi"]');
+      if (conditionalDiv) {
+        conditionalDiv.style.display = e.target.value === 'ya' ? 'block' : 'none';
+      }
+    }
+  });
+  
+  // Initialize on load
+  if (document.getElementById('step1')) {
+    showStep(currentStep);
+  }
 })();
 </script>
 </body>

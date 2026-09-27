@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
@@ -18,48 +19,60 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        $cred = $request->validate(
-            ['username' => 'required', 'password' => 'required'],
-            ['username.required' => 'Username wajib diisi', 'password.required' => 'Password wajib diisi']
-        );
+        try {
+            $cred = $request->validate(
+                ['username' => 'required', 'password' => 'required'],
+                ['username.required' => 'Username wajib diisi', 'password.required' => 'Password wajib diisi']
+            );
 
-        if (Auth::validate(['username' => $cred['username'], 'password' => $cred['password']])) {
-            $row = DB::table('users')->where('username', $cred['username'])->first();
-            if ($row && !empty($row->totp_aktif)) {
+            if (Auth::validate(['username' => $cred['username'], 'password' => $cred['password']])) {
+                $row = DB::table('users')->where('username', $cred['username'])->first();
+                if ($row && !empty($row->totp_aktif)) {
+                    Cache::forget('gagal_' . strtolower($cred['username']));
+                    $request->session()->put('tunggu_2fa', $row->id);
+                    $request->session()->put('tunggu_2fa_ing', $request->boolean('remember'));
+                    $request->session()->regenerate();
+                    if ($request->expectsJson()) return response()->json(['perlu_2fa' => true], 202);
+                    return redirect('/verifikasi-2fa');
+                }
+            }
+            if (Auth::attempt(['username' => $cred['username'], 'password' => $cred['password']], $request->boolean('remember'))) {
                 Cache::forget('gagal_' . strtolower($cred['username']));
-                $request->session()->put('tunggu_2fa', $row->id);
-                $request->session()->put('tunggu_2fa_ing', $request->boolean('remember'));
+                DB::table('login_logs')->insert(['username' => $cred['username'], 'ip' => $request->ip(), 'agen' => substr((string) $request->userAgent(), 0, 255), 'berhasil' => true]);
+                $request->session()->put('sesi_mulai', time());
                 $request->session()->regenerate();
-                if ($request->expectsJson()) return response()->json(['perlu_2fa' => true], 202);
-                return redirect('/verifikasi-2fa');
+                if ($request->expectsJson()) {
+                    $u = $request->user()->load('province');
+                    return response()->json(['user' => [
+                        'id' => $u->id, 'username' => $u->username, 'full_name' => $u->full_name,
+                        'role' => $u->role, 'province_id' => $u->province_id,
+                        'province_name' => $u->province?->name,
+                    ]]);
+                }
+                return redirect()->intended('/dashboard');
             }
-        }
-        if (Auth::attempt(['username' => $cred['username'], 'password' => $cred['password']], $request->boolean('remember'))) {
-            Cache::forget('gagal_' . strtolower($cred['username']));
-            DB::table('login_logs')->insert(['username' => $cred['username'], 'ip' => $request->ip(), 'agen' => substr((string) $request->userAgent(), 0, 255), 'berhasil' => true]);
-            $request->session()->put('sesi_mulai', time());
-            $request->session()->regenerate();
-            if ($request->expectsJson()) {
-                $u = $request->user()->load('province');
-                return response()->json(['user' => [
-                    'id' => $u->id, 'username' => $u->username, 'full_name' => $u->full_name,
-                    'role' => $u->role, 'province_id' => $u->province_id,
-                    'province_name' => $u->province?->name,
-                ]]);
-            }
-            return redirect()->intended('/dashboard');
-        }
 
-        $kunci = 'gagal_' . strtolower($cred['username']);
-        if (Cache::get($kunci, 0) >= 10) {
-            $msg = 'Akun dikunci sementara karena terlalu banyak salah. Coba lagi 15 menit.';
-            if ($request->expectsJson()) return response()->json(['error' => $msg], 423);
-            return back()->withErrors(['username' => $msg])->onlyInput('username');
+            $kunci = 'gagal_' . strtolower($cred['username']);
+            if (Cache::get($kunci, 0) >= 10) {
+                $msg = 'Akun dikunci sementara karena terlalu banyak salah. Coba lagi 15 menit.';
+                if ($request->expectsJson()) return response()->json(['error' => $msg], 423);
+                return back()->withErrors(['username' => $msg])->onlyInput('username');
+            }
+            Cache::put($kunci, Cache::get($kunci, 0) + 1, 900);
+            DB::table('login_logs')->insert(['username' => $cred['username'], 'ip' => $request->ip(), 'agen' => substr((string) $request->userAgent(), 0, 255), 'berhasil' => false]);
+            if ($request->expectsJson()) return response()->json(['error' => __('Username atau password salah')], 401);
+            return back()->withErrors(['username' => __('Username atau password salah')])->onlyInput('username');
+        } catch (\Exception $e) {
+            \Log::error('Error pada login', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'ip' => $request->ip(),
+            ]);
+            $msg = 'Terjadi kesalahan saat login. Silakan coba lagi nanti.';
+            if ($request->expectsJson()) return response()->json(['error' => $msg], 500);
+            return back()->withErrors(['error' => $msg])->onlyInput('username');
         }
-        Cache::put($kunci, Cache::get($kunci, 0) + 1, 900);
-        DB::table('login_logs')->insert(['username' => $cred['username'], 'ip' => $request->ip(), 'agen' => substr((string) $request->userAgent(), 0, 255), 'berhasil' => false]);
-        if ($request->expectsJson()) return response()->json(['error' => __('Username atau password salah')], 401);
-        return back()->withErrors(['username' => __('Username atau password salah')])->onlyInput('username');
     }
 
     public function lupa()
@@ -69,19 +82,29 @@ class AuthController extends Controller
 
     public function aturUlang(Request $request)
     {
-        $data = $request->validate([
-            'token' => 'required', 'baru' => 'required|min:6',
-        ]);
-        $tok = DB::table('reset_tokens')->where('token', trim($data['token']))->first();
-        if (!$tok || $tok->expires_at < date('Y-m-d H:i:s')) {
-            return back()->withErrors(['token' => __('Token salah atau kedaluwarsa')])->withInput();
+        try {
+            $data = $request->validate([
+                'token' => 'required', 'baru' => 'required|min:6',
+            ]);
+            $tok = DB::table('reset_tokens')->where('token', trim($data['token']))->first();
+            if (!$tok || $tok->expires_at < date('Y-m-d H:i:s')) {
+                return back()->withErrors(['token' => __('Token salah atau kedaluwarsa')])->withInput();
+            }
+            if ($tolak = \App\Support\PasswordKuat::cek($data['baru'])) {
+                return back()->withErrors(['baru' => $tolak])->withInput();
+            }
+            DB::table('users')->where('id', $tok->user_id)->update(['password_hash' => Hash::make($data['baru'])]);
+            DB::table('reset_tokens')->where('id', $tok->id)->delete();
+            return redirect('/login')->with('toast', ['type' => 'success', 'text' => __('Password baru tersimpan. Silakan masuk.')]);
+        } catch (\Exception $e) {
+            Log::error('Error pada reset password', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'ip' => $request->ip(),
+            ]);
+            return back()->withErrors(['error' => 'Terjadi kesalahan saat reset password. Silakan coba lagi nanti.'])->withInput();
         }
-        if ($tolak = \App\Support\PasswordKuat::cek($data['baru'])) {
-            return back()->withErrors(['baru' => $tolak])->withInput();
-        }
-        DB::table('users')->where('id', $tok->user_id)->update(['password_hash' => Hash::make($data['baru'])]);
-        DB::table('reset_tokens')->where('id', $tok->id)->delete();
-        return redirect('/login')->with('toast', ['type' => 'success', 'text' => __('Password baru tersimpan. Silakan masuk.')]);
     }
 
     public function kode2fa()
@@ -92,21 +115,31 @@ class AuthController extends Controller
 
     public function cek2fa(Request $request)
     {
-        $uid = $request->session()->get('tunggu_2fa');
-        abort_unless($uid, 403, 'Tidak ada sesi verifikasi');
-        $row = DB::table('users')->where('id', $uid)->first();
-        $kode = preg_replace('/\D/', '', (string) $request->input('kode', ''));
-        $ok = $row && !empty($row->totp_secret)
-            && (new \PragmaRX\Google2FA\Google2FA)->verifyKey($row->totp_secret, $kode);
-        if (!$ok) {
-            return back()->withErrors(['kode' => __('Kode salah atau kedaluwarsa')]);
+        try {
+            $uid = $request->session()->get('tunggu_2fa');
+            abort_unless($uid, 403, 'Tidak ada sesi verifikasi');
+            $row = DB::table('users')->where('id', $uid)->first();
+            $kode = preg_replace('/\\D/', '', (string) $request->input('kode', ''));
+            $ok = $row && !empty($row->totp_secret)
+                && (new \PragmaRX\Google2FA\Google2FA)->verifyKey($row->totp_secret, $kode);
+            if (!$ok) {
+                return back()->withErrors(['kode' => __('Kode salah atau kedaluwarsa')]);
+            }
+            $request->session()->forget('tunggu_2fa');
+            Auth::loginUsingId($uid, (bool) $request->session()->pull('tunggu_2fa_ing', false));
+            DB::table('login_logs')->insert(['username' => $row->username, 'ip' => $request->ip(), 'agen' => substr((string) $request->userAgent(), 0, 255), 'berhasil' => true]);
+            $request->session()->put('sesi_mulai', time());
+            $request->session()->regenerate();
+            return redirect()->intended('/dashboard');
+        } catch (\Exception $e) {
+            Log::error('Error pada verifikasi 2FA', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'ip' => $request->ip(),
+            ]);
+            return back()->withErrors(['error' => 'Terjadi kesalahan saat verifikasi. Silakan coba lagi nanti.']);
         }
-        $request->session()->forget('tunggu_2fa');
-        Auth::loginUsingId($uid, (bool) $request->session()->pull('tunggu_2fa_ing', false));
-        DB::table('login_logs')->insert(['username' => $row->username, 'ip' => $request->ip(), 'agen' => substr((string) $request->userAgent(), 0, 255), 'berhasil' => true]);
-        $request->session()->put('sesi_mulai', time());
-        $request->session()->regenerate();
-        return redirect()->intended('/dashboard');
     }
 
     public function perpanjang(Request $request)
@@ -147,10 +180,9 @@ class AuthController extends Controller
                 'password' => 'required|min:6',
                 'full_name' => 'required|max:100',
                 'no_whatsapp' => 'required|regex:/^08[0-9]{9,11}$/|unique:users,no_whatsapp',
-                'role' => 'required|in:user,admin,operator,superadmin',
                 'province_id' => 'required|exists:provinces,id',
-                'city_id' => 'nullable|required_if:role,admin,operator|exists:cities,id',
-                'district_id' => 'nullable|required_if:role,operator|exists:districts,id',
+                'city_id' => 'required|exists:cities,id',
+                'district_id' => 'required|exists:districts,id',
             ],
             [
                 'username.required' => 'Username wajib diisi',
@@ -160,10 +192,9 @@ class AuthController extends Controller
                 'no_whatsapp.required' => 'No WhatsApp wajib diisi',
                 'no_whatsapp.regex' => 'No WhatsApp harus format 08xxxxxxxxxx',
                 'no_whatsapp.unique' => 'No WhatsApp sudah terdaftar',
-                'role.required' => 'Role wajib dipilih',
                 'province_id.required' => 'Provinsi wajib dipilih',
-                'city_id.required_if' => 'Kab/Kota wajib dipilih untuk role admin/operator',
-                'district_id.required_if' => 'Kecamatan wajib dipilih untuk role operator',
+                'city_id.required' => 'Kab/Kota wajib dipilih',
+                'district_id.required' => 'Kecamatan wajib dipilih',
             ]
         );
 
@@ -177,7 +208,7 @@ class AuthController extends Controller
             'password_hash' => Hash::make($data['password']),
             'full_name' => $data['full_name'],
             'no_whatsapp' => $data['no_whatsapp'],
-            'role' => $data['role'],
+            'role' => 'operator', // HARDCODED: public registration selalu operator
             'province_id' => $data['province_id'],
             'city_id' => $data['city_id'] ?? null,
             'district_id' => $data['district_id'] ?? null,

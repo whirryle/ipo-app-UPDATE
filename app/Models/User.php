@@ -10,7 +10,11 @@ class User extends Authenticatable
 
     public $timestamps = false;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'username', 'password_hash', 'full_name', 'no_whatsapp', 'role',
+        'province_id', 'city_id', 'district_id',
+        'totp_secret', 'totp_aktif', 'remember_token'
+    ];
 
     protected $hidden = ['password_hash'];
 
