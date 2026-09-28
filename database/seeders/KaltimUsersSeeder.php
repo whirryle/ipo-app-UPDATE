@@ -45,10 +45,11 @@ class KaltimUsersSeeder extends Seeder
             ]);
         }
 
-        // 3. Operator Kecamatan (sample: 1 operator per kota, biar gampang test)
-        foreach ($cities as $city) {
-            $district = DB::table('districts')->where('city_id', $city->id)->first();
-            if ($district) {
+        // 3. Operator Kecamatan (105 akun - 1 operator per kecamatan)
+        $districts = DB::table('districts')->get();
+        foreach ($districts as $district) {
+            $city = DB::table('cities')->where('id', $district->city_id)->first();
+            if ($city) {
                 $districtSlug = $this->slugify($district->name);
                 $citySlug = $this->slugify($city->name);
                 DB::table('users')->insert([
@@ -67,7 +68,7 @@ class KaltimUsersSeeder extends Seeder
         $this->command->info('✅ User 3 level berhasil di-seed:');
         $this->command->line('   • 1 Super Admin (admin / admin123)');
         $this->command->line('   • 10 Admin Kota/Kab (admin_samarinda / samarinda123, dll)');
-        $this->command->line('   • 10 Operator Kecamatan (1 per kota, operator_samarinda_loa_janan_ilir / operator123, dll)');
+        $this->command->line('   • 105 Operator Kecamatan (1 per kecamatan, operator_samarinda_loa_janan_ilir / operator123, dll)');
     }
 
     private function slugify(string $text): string

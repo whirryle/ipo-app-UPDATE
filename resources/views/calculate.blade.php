@@ -54,7 +54,7 @@
     <div style="display:flex;gap:16px;align-items:center">
       <div style="width:64px;height:64px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:var(--accent-light);color:var(--accent);font-size:28px;flex-shrink:0">🧮</div>
       <div>
-        <p style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3)">IPO Score — {{ $provinceName }} {{ $year }}</p>
+        <p style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3)">IPO Score — {{ $scopeName }} {{ $year }}</p>
         <p style="font-size:28px;font-weight:700;color:var(--ink)">{{ number_format($score, $score == round($score) ? 0 : 2, ',', '.') }} <span style="font-size:14px;font-weight:400;color:var(--ink-3)">/100</span></p>
         <span class="badge" style="margin-top:4px" data-bg="{{ $katBg }}" data-color="{{ $katFg }}">{{ $kategori }}</span>
       </div>

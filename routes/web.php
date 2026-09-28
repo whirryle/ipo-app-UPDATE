@@ -113,7 +113,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/hitung/ulang', [CalculateController::class, 'recalculate']);
     Route::get('/hitung/riwayat/{provinceId}', [CalculateController::class, 'history'])->where('provinceId', '[0-9]+');
 
-    Route::get('/grafik', [GraphController::class, 'show']);
     Route::get('/banding', [BandingController::class, 'index']);
     Route::get('/notifikasi', [NotifikasiController::class, 'index']);
     Route::post('/notifikasi/{id}/baca', [NotifikasiController::class, 'baca'])->where('id', '[0-9]+');

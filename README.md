@@ -26,7 +26,7 @@ grafik tren 5 tahun, serta laporan yang bisa **diekspor ke PDF** atau **dicetak*
 composer install
 cp .env.example .env && php artisan key:generate
 touch database/database.sqlite
-php artisan migrate --seed   # Seed data Kalimantan Timur (admin, 10 admin kab/kota, 109 operator, user)
+php artisan migrate --seed   # Seed data Kalimantan Timur (1 super admin, 10 admin kab/kota, 105 operator kecamatan)
 php artisan serve --host=0.0.0.0 --port=8000
 ```
 
@@ -36,7 +36,7 @@ Buka `http://localhost:8000/login`.
 | ---- | -------- | -------- | ----- |
 | Superadmin (Dispora Kaltim) | `admin` | `admin123` | Semua kab/kota + kelola user |
 | Admin Kab/Kota | `admin_balikpapan`, `admin_samarinda`, dll | `<slug>123` (mis. `balikpapan123`) | Kabupaten/kotanya saja |
-| Operator Kecamatan | `operator_1`, `operator_2`, dll | `operator123` | Kecamatannya saja |
+| Operator Kecamatan | `operator_samarinda_loa_janan_ilir`, dll | `operator123` | Kecamatannya saja |
 | User biasa | `user_biasa` | `user123` | Lihat saja |
 
 Uji otomatis: `php artisan test` (5 grup, 165 assertion — lolos).

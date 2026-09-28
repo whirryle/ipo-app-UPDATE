@@ -14,8 +14,21 @@ class CalculateController extends Controller
         $u = $request->user();
         $year = (int) ($request->query('year') ?: IpoCalculator::latestYear());
         $pid = $u->province_id ? (int) $u->province_id : (int) ($request->query('province_id') ?: 1);
-        $result = IpoCalculator::full($pid, $year);
-        $province = DB::table('provinces')->where('id', $pid)->first();
+        
+        // Determine scope berdasarkan role
+        if ($u->role === 'operator' && $u->district_id) {
+            $result = IpoCalculator::districtFull($u->district_id, $year);
+            $district = DB::table('districts')->where('id', $u->district_id)->first();
+            $scopeName = $district->name ?? 'Kecamatan';
+        } elseif ($u->role === 'admin_city' && $u->city_id) {
+            $result = IpoCalculator::cityFull($u->city_id, $year);
+            $city = DB::table('cities')->where('id', $u->city_id)->first();
+            $scopeName = $city->name ?? 'Kabupaten/Kota';
+        } else {
+            $result = IpoCalculator::full($pid, $year);
+            $province = DB::table('provinces')->where('id', $pid)->first();
+            $scopeName = $province->name ?? 'Kalimantan Timur';
+        }
 
         $labels = [
             'd1_sdm' => 'SDM Olahraga', 'd2_ruang_terbuka' => 'Ruang Terbuka',
@@ -31,7 +44,7 @@ class CalculateController extends Controller
 
         return view('calculate', [
             'year' => $year, 'pid' => $pid,
-            'provinceName' => $province->name ?? 'Semua Provinsi',
+            'scopeName' => $scopeName,
             'score' => $result['display_score'], 'kategori' => $result['kategori'],
             'dims' => $dims, 'tanpaData' => $result['_tanpaData'] ?? false,
             'years' => $this->yearOptions(),
