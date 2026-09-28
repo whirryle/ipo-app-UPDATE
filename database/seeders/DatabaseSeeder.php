@@ -20,10 +20,12 @@ class DatabaseSeeder extends Seeder
         // ~8000 baris insert: matikan fsync per-commit selama seed (10–50x lebih cepat).
         DB::statement('PRAGMA synchronous = OFF');
         try {
-            DB::transaction(fn() => $this->call(SampleSeeder::class));
-            DB::transaction(fn() => $this->call(Nasional2024Seeder::class));
-            DB::transaction(fn() => $this->call(TrenSeeder::class));
-            DB::transaction(fn() => $this->call(OperatorsSeeder::class));
+            // KALIMANTAN TIMUR ONLY (bukan seluruh Indonesia)
+            DB::transaction(fn() => $this->call(KaltimSeeder::class));
+            DB::transaction(fn() => $this->call(KaltimUsersSeeder::class));
+            // Optional: seed data tren & nasional (skip jika gak butuh)
+            // DB::transaction(fn() => $this->call(TrenSeeder::class));
+            // DB::transaction(fn() => $this->call(Nasional2024Seeder::class));
         } finally {
             DB::statement('PRAGMA synchronous = FULL');
         }
